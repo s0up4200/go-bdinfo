@@ -49,7 +49,7 @@ func WriteReport(path string, bd *bdrom.BDROM, playlists []*bdrom.PlaylistFile, 
 		fmt.Fprintf(&b, "%-16s%s\n", "Disc Title:", bd.DiscTitle)
 	}
 	fmt.Fprintf(&b, "%-16s%s\n", "Disc Label:", bd.VolumeLabel)
-	fmt.Fprintf(&b, "%-16s%d bytes\n", "Disc Size:", bd.Size)
+	fmt.Fprintf(&b, "%-16s%s bytes\n", "Disc Size:", util.FormatNumber(int64(bd.Size)))
 	fmt.Fprintf(&b, "%-16s%s\n", "Protection:", protection)
 
 	extra := []string{}
@@ -74,7 +74,7 @@ func WriteReport(path string, bd *bdrom.BDROM, playlists []*bdrom.PlaylistFile, 
 	if len(extra) > 0 {
 		fmt.Fprintf(&b, "%-16s%s\n", "Extras:", strings.Join(extra, ", "))
 	}
-	fmt.Fprintf(&b, "%-16s%s\n\n", "BDInfo:", productVersion)
+	fmt.Fprintf(&b, "%-16s%s\n\n\n", "BDInfo:", productVersion)
 
 	if scan.ScanError != nil {
 		fmt.Fprintf(&b, "WARNING: Report is incomplete because: %s\n", scan.ScanError.Error())
@@ -86,7 +86,7 @@ func WriteReport(path string, bd *bdrom.BDROM, playlists []*bdrom.PlaylistFile, 
 		}
 	}
 
-	sort.Slice(playlists, func(i, j int) bool {
+	sort.SliceStable(playlists, func(i, j int) bool {
 		return playlists[i].FileSize() > playlists[j].FileSize()
 	})
 
@@ -95,6 +95,7 @@ func WriteReport(path string, bd *bdrom.BDROM, playlists []*bdrom.PlaylistFile, 
 		if settings.FilterLoopingPlaylists && !playlist.IsValid() {
 			continue
 		}
+		var summary strings.Builder
 
 		playlistLength := playlist.TotalLength()
 		totalLength := util.FormatTime(playlistLength, true)
@@ -102,6 +103,8 @@ func WriteReport(path string, bd *bdrom.BDROM, playlists []*bdrom.PlaylistFile, 
 
 		totalSize := playlist.TotalSize()
 		discSize := bd.Size
+		totalSizeStr := util.FormatNumber(int64(totalSize))
+		discSizeStr := util.FormatNumber(int64(discSize))
 		totalBitrate := formatMbps(playlist.TotalBitRate())
 
 		videoCodec := ""
@@ -109,9 +112,7 @@ func WriteReport(path string, bd *bdrom.BDROM, playlists []*bdrom.PlaylistFile, 
 		if len(playlist.VideoStreams) > 0 {
 			vs := playlist.VideoStreams[0]
 			videoCodec = stream.CodecAltNameForInfo(vs)
-			if vs.BitRate > 0 {
-				videoBitrate = fmt.Sprintf("%d", int(math.Round(float64(vs.BitRate)/1000)))
-			}
+			videoBitrate = formatMbps(uint64(vs.BitRate))
 		}
 
 		mainAudio := ""
@@ -122,7 +123,7 @@ func WriteReport(path string, bd *bdrom.BDROM, playlists []*bdrom.PlaylistFile, 
 			mainLang = as.LanguageCode()
 			mainAudio = fmt.Sprintf("%s %s", stream.CodecAltNameForInfo(as), as.ChannelDescription())
 			if as.BitRate > 0 {
-				mainAudio += fmt.Sprintf(" %dKbps", int(math.Round(float64(as.BitRate)/1000)))
+				mainAudio += fmt.Sprintf(" %dKbps", int(math.RoundToEven(float64(as.BitRate)/1000)))
 			}
 			if as.SampleRate > 0 && as.BitDepth > 0 {
 				mainAudio += fmt.Sprintf(" (%dkHz/%d-bit)", as.SampleRate/1000, as.BitDepth)
@@ -141,7 +142,7 @@ func WriteReport(path string, bd *bdrom.BDROM, playlists []*bdrom.PlaylistFile, 
 				}
 				secondaryAudio = fmt.Sprintf("%s %s", stream.CodecAltNameForInfo(as), as.ChannelDescription())
 				if as.BitRate > 0 {
-					secondaryAudio += fmt.Sprintf(" %dKbps", int(math.Round(float64(as.BitRate)/1000)))
+					secondaryAudio += fmt.Sprintf(" %dKbps", int(math.RoundToEven(float64(as.BitRate)/1000)))
 				}
 				if as.SampleRate > 0 && as.BitDepth > 0 {
 					secondaryAudio += fmt.Sprintf(" (%dkHz/%d-bit)", as.SampleRate/1000, as.BitDepth)
@@ -150,37 +151,37 @@ func WriteReport(path string, bd *bdrom.BDROM, playlists []*bdrom.PlaylistFile, 
 			}
 		}
 
-		b.WriteString("\n********************\n")
+		b.WriteString("\n\n********************\n")
 		fmt.Fprintf(&b, "PLAYLIST: %s\n", playlist.Name)
-		b.WriteString("********************\n\n")
+		b.WriteString("********************\n\n\n")
 		b.WriteString("<--- BEGIN FORUMS PASTE --->\n")
 		b.WriteString("[code]\n")
 		fmt.Fprintf(&b, "%-64s%-8s%-8s%-16s%-16s%-8s%-8s%-42s%s\n", "", "", "", "", "", "Total", "Video", "", "")
 		fmt.Fprintf(&b, "%-64s%-8s%-8s%-16s%-16s%-8s%-8s%-42s%s\n", "Title", "Codec", "Length", "Movie Size", "Disc Size", "Bitrate", "Bitrate", "Main Audio Track", "Secondary Audio Track")
 		fmt.Fprintf(&b, "%-64s%-8s%-8s%-16s%-16s%-8s%-8s%-42s%s\n", "-----", "------", "-------", "--------------", "--------------", "-------", "-------", "------------------", "---------------------")
-		fmt.Fprintf(&b, "%-64s%-8s%-8s%-16s%-16s%-8s%-8s%-42s%s\n", playlist.Name, videoCodec, totalLengthShort, fmt.Sprintf("%d", totalSize), fmt.Sprintf("%d", discSize), totalBitrate, videoBitrate, mainAudio, secondaryAudio)
-		b.WriteString("[/code]\n\n")
-		b.WriteString("[code]\n\n")
+		fmt.Fprintf(&b, "%-64s%-8s%-8s%-16s%-16s%-8s%-8s%-42s%s\n", playlist.Name, videoCodec, totalLengthShort, totalSizeStr, discSizeStr, totalBitrate, videoBitrate, mainAudio, secondaryAudio)
+		b.WriteString("[/code]\n\n\n")
+		b.WriteString("[code]\n\n\n")
 		if settings.GroupByTime {
 			fmt.Fprintf(&b, "\n%sStart group %.0f%s\n", separator, playlistLength*1000, separator)
 		}
 
-		b.WriteString("\nDISC INFO:\n\n")
+		b.WriteString("DISC INFO:\n\n\n")
 		if bd.DiscTitle != "" {
 			fmt.Fprintf(&b, "%-16s%s\n", "Disc Title:", bd.DiscTitle)
 		}
 		fmt.Fprintf(&b, "%-16s%s\n", "Disc Label:", bd.VolumeLabel)
-		fmt.Fprintf(&b, "%-16s%d bytes\n", "Disc Size:", bd.Size)
+		fmt.Fprintf(&b, "%-16s%s bytes\n", "Disc Size:", util.FormatNumber(int64(bd.Size)))
 		fmt.Fprintf(&b, "%-16s%s\n", "Protection:", protection)
 		if len(extra) > 0 {
 			fmt.Fprintf(&b, "%-16s%s\n", "Extras:", strings.Join(extra, ", "))
 		}
-		fmt.Fprintf(&b, "%-16s%s\n\n", "BDInfo:", productVersion)
+		fmt.Fprintf(&b, "%-16s%s\n\n\n", "BDInfo:", productVersion)
 
-		b.WriteString("PLAYLIST REPORT:\n\n")
+		b.WriteString("PLAYLIST REPORT:\n\n\n")
 		fmt.Fprintf(&b, "%-24s%s\n", "Name:", playlist.Name)
 		fmt.Fprintf(&b, "%-24s%s (h:m:s.ms)\n", "Length:", totalLength)
-		fmt.Fprintf(&b, "%-24s%d bytes\n", "Size:", totalSize)
+		fmt.Fprintf(&b, "%-24s%s bytes\n", "Size:", totalSizeStr)
 		fmt.Fprintf(&b, "%-24s%s Mbps\n", "Total Bitrate:", totalBitrate)
 
 		if playlist.HasHiddenTracks {
@@ -188,7 +189,7 @@ func WriteReport(path string, bd *bdrom.BDROM, playlists []*bdrom.PlaylistFile, 
 		}
 
 		if len(playlist.VideoStreams) > 0 {
-			b.WriteString("\nVIDEO:\n\n")
+			b.WriteString("\n\nVIDEO:\n\n\n")
 			fmt.Fprintf(&b, "%-24s%-20s%-16s\n", "Codec", "Bitrate", "Description")
 			fmt.Fprintf(&b, "%-24s%-20s%-16s\n", "-----", "-------", "-----------")
 			for _, st := range playlist.SortedStreams {
@@ -196,72 +197,138 @@ func WriteReport(path string, bd *bdrom.BDROM, playlists []*bdrom.PlaylistFile, 
 					continue
 				}
 				name := stream.CodecNameForInfo(st)
-				bitrate := fmt.Sprintf("%d", int(math.Round(float64(st.Base().BitRate)/1000)))
-				fmt.Fprintf(&b, "%-24s%-20s%-16s\n", name, bitrate, st.Description())
+				if st.Base().AngleIndex > 0 {
+					name = fmt.Sprintf("%s (%d)", name, st.Base().AngleIndex)
+				}
+				bitrate := fmt.Sprintf("%d", int(math.RoundToEven(float64(st.Base().BitRate)/1000)))
+				if st.Base().AngleIndex > 0 {
+					bitrate = fmt.Sprintf("%s (%d)", bitrate, int(math.RoundToEven(float64(st.Base().ActiveBitRate)/1000)))
+				}
+				bitrate = fmt.Sprintf("%s kbps", bitrate)
+				fmt.Fprintf(&b, "%-24s%-20s%-16s\n", hiddenPrefix(st)+name, bitrate, st.Description())
+				if settings.GenerateTextSummary {
+					fmt.Fprintf(&summary, "%sVideo: %s / %s / %s\n", hiddenPrefix(st), name, bitrate, st.Description())
+				}
 			}
 		}
 
 		if len(playlist.AudioStreams) > 0 {
-			b.WriteString("\nAUDIO:\n\n")
-			fmt.Fprintf(&b, "%-24s%-8s%-12s%-16s%-16s\n", "Codec", "PID", "Language", "Bitrate", "Description")
-			fmt.Fprintf(&b, "%-24s%-8s%-12s%-16s%-16s\n", "-----", "---", "--------", "-------", "-----------")
+			b.WriteString("\n\nAUDIO:\n\n\n")
+			fmt.Fprintf(&b, "%-32s%-16s%-16s%-16s\n", "Codec", "Language", "Bitrate", "Description")
+			fmt.Fprintf(&b, "%-32s%-16s%-16s%-16s\n", "-----", "--------", "-------", "-----------")
 			for _, st := range playlist.SortedStreams {
 				if !st.Base().IsAudioStream() {
 					continue
 				}
-				fmt.Fprintf(&b, "%-24s%-8d%-12s%-16s%-16s\n",
-					stream.CodecNameForInfo(st),
-					st.Base().PID,
+				bitrate := fmt.Sprintf("%d kbps", int(math.RoundToEven(float64(st.Base().BitRate)/1000)))
+				fmt.Fprintf(&b, "%-32s%-16s%-16s%-16s\n",
+					hiddenPrefix(st)+stream.CodecNameForInfo(st),
 					st.Base().LanguageName,
-					fmt.Sprintf("%d", int(math.Round(float64(st.Base().BitRate)/1000))),
+					bitrate,
 					st.Description(),
 				)
+				if settings.GenerateTextSummary {
+					fmt.Fprintf(&summary, "%sAudio: %s / %s / %s\n", hiddenPrefix(st), st.Base().LanguageName, stream.CodecNameForInfo(st), st.Description())
+				}
 			}
 		}
 
-		if len(playlist.GraphicsStreams) > 0 || len(playlist.TextStreams) > 0 {
-			b.WriteString("\nSUBTITLES:\n\n")
-			fmt.Fprintf(&b, "%-24s%-8s%-12s%-16s\n", "Codec", "PID", "Language", "Description")
-			fmt.Fprintf(&b, "%-24s%-8s%-12s%-16s\n", "-----", "---", "--------", "-----------")
+		if len(playlist.GraphicsStreams) > 0 {
+			b.WriteString("\n\nSUBTITLES:\n\n\n")
+			fmt.Fprintf(&b, "%-32s%-16s%-16s%-16s\n", "Codec", "Language", "Bitrate", "Description")
+			fmt.Fprintf(&b, "%-32s%-16s%-16s%-16s\n", "-----", "--------", "-------", "-----------")
 			for _, st := range playlist.SortedStreams {
-				if !(st.Base().IsGraphicsStream() || st.Base().IsTextStream()) {
+				if !st.Base().IsGraphicsStream() {
 					continue
 				}
-				fmt.Fprintf(&b, "%-24s%-8d%-12s%-16s\n",
-					stream.CodecNameForInfo(st),
-					st.Base().PID,
+				bitrate := fmt.Sprintf("%.3f kbps", float64(st.Base().BitRate)/1000.0)
+				fmt.Fprintf(&b, "%-32s%-16s%-16s%-16s\n",
+					hiddenPrefix(st)+stream.CodecNameForInfo(st),
 					st.Base().LanguageName,
+					bitrate,
+					st.Description(),
+				)
+				if settings.GenerateTextSummary {
+					fmt.Fprintf(&summary, "%sSubtitle: %s / %s\n", hiddenPrefix(st), st.Base().LanguageName, bitrate)
+				}
+			}
+		}
+
+		if len(playlist.TextStreams) > 0 {
+			b.WriteString("\n\nTEXT:\n\n\n")
+			fmt.Fprintf(&b, "%-32s%-16s%-16s%-16s\n", "Codec", "Language", "Bitrate", "Description")
+			fmt.Fprintf(&b, "%-32s%-16s%-16s%-16s\n", "-----", "--------", "-------", "-----------")
+			for _, st := range playlist.SortedStreams {
+				if !st.Base().IsTextStream() {
+					continue
+				}
+				bitrate := fmt.Sprintf("%.3f kbps", float64(st.Base().BitRate)/1000.0)
+				fmt.Fprintf(&b, "%-32s%-16s%-16s%-16s\n",
+					hiddenPrefix(st)+stream.CodecNameForInfo(st),
+					st.Base().LanguageName,
+					bitrate,
 					st.Description(),
 				)
 			}
 		}
 
-		b.WriteString("\nFILES:\n\n")
-		fmt.Fprintf(&b, "%-10s%-16s%-16s%-16s\n", "File", "Length", "Size", "Bitrate")
-		fmt.Fprintf(&b, "%-10s%-16s%-16s%-16s\n", "----", "------", "----", "-------")
+		b.WriteString("\n\nFILES:\n\n\n")
+		fmt.Fprintf(&b, "%-16s%-16s%-16s%-16s%-16s\n", "Name", "Time In", "Length", "Size", "Total Bitrate")
+		fmt.Fprintf(&b, "%-16s%-16s%-16s%-16s%-16s\n", "----", "-------", "------", "----", "-------------")
 		for _, clip := range playlist.StreamClips {
-			if clip.AngleIndex != 0 {
-				continue
+			clipName := clip.DisplayName()
+			if clip.AngleIndex > 0 {
+				clipName = fmt.Sprintf("%s (%d)", clipName, clip.AngleIndex)
 			}
 			length := util.FormatTime(clip.Length, true)
-			bitrate := "0"
-			if clip.PacketSeconds > 0 {
-				bitrate = fmt.Sprintf("%d", int(math.Round(float64(clip.PacketBitRate())/1000)))
-			}
-			fmt.Fprintf(&b, "%-10s%-16s%-16d%-16s\n", clip.DisplayName(), length, clip.PacketSize(), bitrate)
+			timeIn := util.FormatTime(clip.RelativeTimeIn, true)
+			clipSize := util.FormatNumber(int64(clip.PacketSize()))
+			bitrate := util.FormatNumber(int64(math.RoundToEven(float64(clip.PacketBitRate()) / 1000)))
+			fmt.Fprintf(&b, "%-16s%-16s%-16s%-16s%-16s\n", clipName, timeIn, length, clipSize, bitrate)
+		}
+
+		if settings.GroupByTime {
+			b.WriteString("\n")
+			fmt.Fprintf(&b, "%sEnd group%s\n\n\n", separator, separator)
 		}
 
 		if len(playlist.Chapters) > 0 {
-			b.WriteString("\nCHAPTERS:\n\n")
-			fmt.Fprintf(&b, "%-10s%-16s\n", "Number", "Time")
-			fmt.Fprintf(&b, "%-10s%-16s\n", "------", "----")
-			for idx, chapter := range playlist.Chapters {
-				fmt.Fprintf(&b, "%-10d%-16s\n", idx+1, util.FormatTime(chapter, true))
-			}
+			b.WriteString("\n\nCHAPTERS:\n\n\n")
+			fmt.Fprintf(&b, "%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s\n",
+				"Number",
+				"Time In",
+				"Length",
+				"Avg Video Rate",
+				"Max 1-Sec Rate",
+				"Max 1-Sec Time",
+				"Max 5-Sec Rate",
+				"Max 5-Sec Time",
+				"Max 10Sec Rate",
+				"Max 10Sec Time",
+				"Avg Frame Size",
+				"Max Frame Size",
+				"Max Frame Time",
+			)
+			fmt.Fprintf(&b, "%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s\n",
+				"------",
+				"-------",
+				"------",
+				"--------------",
+				"--------------",
+				"--------------",
+				"--------------",
+				"--------------",
+				"--------------",
+				"--------------",
+				"--------------",
+				"--------------",
+				"--------------",
+			)
+			writeChapters(&b, playlist)
 		}
 
 		if settings.GenerateStreamDiagnostics {
-			b.WriteString("\n\nSTREAM DIAGNOSTICS:\n\n")
+			b.WriteString("\n\nSTREAM DIAGNOSTICS:\n\n\n")
 			fmt.Fprintf(&b, "%-16s%-16s%-16s%-16s%-24s%-24s%-24s%-16s%-16s\n",
 				"File", "PID", "Type", "Codec", "Language", "Seconds", "Bitrate", "Bytes", "Packets")
 			fmt.Fprintf(&b, "%-16s%-16s%-16s%-16s%-24s%-24s%-24s%-16s%-16s\n",
@@ -291,7 +358,7 @@ func WriteReport(path string, bd *bdrom.BDROM, playlists []*bdrom.PlaylistFile, 
 					clipBitRate := "0"
 					if clip.StreamFile.Length > 0 {
 						clipSeconds = fmt.Sprintf("%.3f", clip.StreamFile.Length)
-						clipBitRate = util.FormatNumber(int64(math.Round(float64(clipStream.Base().PayloadBytes)*8/clip.StreamFile.Length/1000)))
+						clipBitRate = util.FormatNumber(int64(math.RoundToEven(float64(clipStream.Base().PayloadBytes) * 8 / clip.StreamFile.Length / 1000)))
 					}
 
 					language := ""
@@ -314,26 +381,24 @@ func WriteReport(path string, bd *bdrom.BDROM, playlists []*bdrom.PlaylistFile, 
 			}
 		}
 
-		b.WriteString("\n[/code]\n<---- END FORUMS PASTE ---->\n\n")
+		b.WriteString("\n\n[/code]\n<---- END FORUMS PASTE ---->\n\n\n")
 
 		if settings.GenerateTextSummary {
-			b.WriteString("QUICK SUMMARY:\n\n")
+			b.WriteString("QUICK SUMMARY:\n\n\n")
 			if bd.DiscTitle != "" {
 				fmt.Fprintf(&b, "Disc Title: %s\n", bd.DiscTitle)
 			}
 			fmt.Fprintf(&b, "Disc Label: %s\n", bd.VolumeLabel)
-			fmt.Fprintf(&b, "Disc Size: %d bytes\n", bd.Size)
+			fmt.Fprintf(&b, "Disc Size: %s bytes\n", util.FormatNumber(int64(bd.Size)))
 			fmt.Fprintf(&b, "Protection: %s\n", protection)
 			fmt.Fprintf(&b, "Playlist: %s\n", playlist.Name)
-			fmt.Fprintf(&b, "Size: %d bytes\n", totalSize)
+			fmt.Fprintf(&b, "Size: %s bytes\n", totalSizeStr)
 			fmt.Fprintf(&b, "Length: %s\n", totalLength)
 			fmt.Fprintf(&b, "Total Bitrate: %s Mbps\n", totalBitrate)
-			b.WriteString("\n")
-		}
-
-		if settings.GroupByTime {
-			b.WriteString("\n")
-			fmt.Fprintf(&b, "%sEnd group%s\n\n\n", separator, separator)
+			if summary.Len() > 0 {
+				b.WriteString(summary.String())
+			}
+			b.WriteString("\n\n\n\n\n")
 		}
 	}
 
@@ -344,6 +409,251 @@ func formatMbps(bitrate uint64) string {
 	if bitrate == 0 {
 		return "0"
 	}
-	val := math.Round(float64(bitrate)/10000.0) / 100.0
+	val := math.RoundToEven(float64(bitrate)/10000.0) / 100.0
 	return fmt.Sprintf("%.2f", val)
+}
+
+func hiddenPrefix(info stream.Info) string {
+	if info == nil {
+		return ""
+	}
+	if info.Base().IsHidden {
+		return "* "
+	}
+	return ""
+}
+
+type floatQueue struct {
+	vals []float64
+}
+
+func (q *floatQueue) Enqueue(v float64) {
+	q.vals = append(q.vals, v)
+}
+
+func (q *floatQueue) Dequeue() float64 {
+	if len(q.vals) == 0 {
+		return 0
+	}
+	v := q.vals[0]
+	q.vals = q.vals[1:]
+	return v
+}
+
+func formatTimeHmsms(seconds float64, padHour bool) string {
+	d := time.Duration(seconds * float64(time.Second))
+	h := int(d.Hours())
+	m := int(d.Minutes()) % 60
+	s := int(d.Seconds()) % 60
+	ms := int(d.Milliseconds()) % 1000
+	if padHour {
+		return fmt.Sprintf("%02d:%02d:%02d.%03d", h, m, s, ms)
+	}
+	return fmt.Sprintf("%d:%02d:%02d.%03d", h, m, s, ms)
+}
+
+func writeChapters(b *strings.Builder, playlist *bdrom.PlaylistFile) {
+	if playlist == nil || len(playlist.Chapters) == 0 {
+		return
+	}
+
+	window1Bits := &floatQueue{}
+	window1Seconds := &floatQueue{}
+	window1BitsSum := 0.0
+	window1SecondsSum := 0.0
+	window1PeakBitrate := 0.0
+	window1PeakLocation := 0.0
+
+	window5Bits := &floatQueue{}
+	window5Seconds := &floatQueue{}
+	window5BitsSum := 0.0
+	window5SecondsSum := 0.0
+	window5PeakBitrate := 0.0
+	window5PeakLocation := 0.0
+
+	window10Bits := &floatQueue{}
+	window10Seconds := &floatQueue{}
+	window10BitsSum := 0.0
+	window10SecondsSum := 0.0
+	window10PeakBitrate := 0.0
+	window10PeakLocation := 0.0
+
+	chapterPosition := 0.0
+	chapterBits := 0.0
+	chapterFrameCount := int64(0)
+	chapterSeconds := 0.0
+	_ = chapterSeconds
+	chapterMaxFrameSize := 0.0
+	chapterMaxFrameLocation := 0.0
+
+	diagPID := uint16(0)
+	if len(playlist.VideoStreams) > 0 {
+		diagPID = playlist.VideoStreams[0].PID
+	}
+
+	chapterIndex := 0
+	clipIndex := 0
+	diagIndex := 0
+
+	for chapterIndex < len(playlist.Chapters) {
+		var clip *bdrom.StreamClip
+		var file *bdrom.StreamFile
+		if clipIndex < len(playlist.StreamClips) {
+			clip = playlist.StreamClips[clipIndex]
+			file = clip.StreamFile
+		}
+
+		chapterStart := playlist.Chapters[chapterIndex]
+		chapterEnd := playlist.TotalLength()
+		if chapterIndex < len(playlist.Chapters)-1 {
+			chapterEnd = playlist.Chapters[chapterIndex+1]
+		}
+		chapterLength := chapterEnd - chapterStart
+
+		var diagList []bdrom.StreamDiagnostics
+		if clip != nil && clip.AngleIndex == 0 && file != nil {
+			if list, ok := file.StreamDiagnostics[diagPID]; ok {
+				diagList = list
+			}
+		}
+
+		if diagList != nil {
+			for diagIndex < len(diagList) && chapterPosition < chapterEnd {
+				diag := diagList[diagIndex]
+				diagIndex++
+
+				if diag.Marker < clip.TimeIn {
+					continue
+				}
+
+				chapterPosition = diag.Marker - clip.TimeIn + clip.RelativeTimeIn
+
+				seconds := diag.Interval
+				bits := float64(diag.Bytes) * 8.0
+
+				chapterBits += bits
+				chapterSeconds += seconds
+
+				if diag.Tag != "" {
+					chapterFrameCount++
+				}
+
+				window1SecondsSum += seconds
+				window1Seconds.Enqueue(seconds)
+				window1BitsSum += bits
+				window1Bits.Enqueue(bits)
+
+				window5SecondsSum += seconds
+				window5Seconds.Enqueue(seconds)
+				window5BitsSum += bits
+				window5Bits.Enqueue(bits)
+
+				window10SecondsSum += seconds
+				window10Seconds.Enqueue(seconds)
+				window10BitsSum += bits
+				window10Bits.Enqueue(bits)
+
+				if bits > chapterMaxFrameSize*8 {
+					chapterMaxFrameSize = bits / 8
+					chapterMaxFrameLocation = chapterPosition
+				}
+
+				if window1SecondsSum > 1.0 {
+					bitrate := window1BitsSum / window1SecondsSum
+					if bitrate > window1PeakBitrate && chapterPosition-window1SecondsSum > 0 {
+						window1PeakBitrate = bitrate
+						window1PeakLocation = chapterPosition - window1SecondsSum
+					}
+					window1BitsSum -= window1Bits.Dequeue()
+					window1SecondsSum -= window1Seconds.Dequeue()
+				}
+				if window5SecondsSum > 5.0 {
+					bitrate := window5BitsSum / window5SecondsSum
+					if bitrate > window5PeakBitrate && chapterPosition-window5SecondsSum > 0 {
+						window5PeakBitrate = bitrate
+						window5PeakLocation = chapterPosition - window5SecondsSum
+						if window5PeakLocation < 0 {
+							window5PeakLocation = 0
+						}
+					}
+					window5BitsSum -= window5Bits.Dequeue()
+					window5SecondsSum -= window5Seconds.Dequeue()
+				}
+				if window10SecondsSum > 10.0 {
+					bitrate := window10BitsSum / window10SecondsSum
+					if bitrate > window10PeakBitrate && chapterPosition-window10SecondsSum > 0 {
+						window10PeakBitrate = bitrate
+						window10PeakLocation = chapterPosition - window10SecondsSum
+					}
+					window10BitsSum -= window10Bits.Dequeue()
+					window10SecondsSum -= window10Seconds.Dequeue()
+				}
+			}
+		}
+
+		if diagList == nil || diagIndex == len(diagList) {
+			if clipIndex < len(playlist.StreamClips) {
+				clipIndex++
+				diagIndex = 0
+			} else {
+				chapterPosition = chapterEnd
+			}
+		}
+
+		if chapterPosition >= chapterEnd {
+			chapterIndex++
+
+			chapterBitrate := 0.0
+			if chapterLength > 0 {
+				chapterBitrate = chapterBits / chapterLength
+			}
+			chapterAvgFrameSize := 0.0
+			if chapterFrameCount > 0 {
+				chapterAvgFrameSize = chapterBits / float64(chapterFrameCount) / 8
+			}
+
+			fmt.Fprintf(b, "%-16d%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s\n",
+				chapterIndex,
+				formatTimeHmsms(chapterStart, false),
+				formatTimeHmsms(chapterLength, false),
+				fmt.Sprintf("%s kbps", util.FormatNumber(int64(math.RoundToEven(chapterBitrate/1000)))),
+				fmt.Sprintf("%s kbps", util.FormatNumber(int64(math.RoundToEven(window1PeakBitrate/1000)))),
+				formatTimeHmsms(window1PeakLocation, true),
+				fmt.Sprintf("%s kbps", util.FormatNumber(int64(math.RoundToEven(window5PeakBitrate/1000)))),
+				formatTimeHmsms(window5PeakLocation, true),
+				fmt.Sprintf("%s kbps", util.FormatNumber(int64(math.RoundToEven(window10PeakBitrate/1000)))),
+				formatTimeHmsms(window10PeakLocation, true),
+				fmt.Sprintf("%s bytes", util.FormatNumber(int64(math.RoundToEven(chapterAvgFrameSize)))),
+				fmt.Sprintf("%s bytes", util.FormatNumber(int64(math.RoundToEven(chapterMaxFrameSize)))),
+				formatTimeHmsms(chapterMaxFrameLocation, true),
+			)
+
+			window1Bits = &floatQueue{}
+			window1Seconds = &floatQueue{}
+			window1BitsSum = 0
+			window1SecondsSum = 0
+			window1PeakBitrate = 0
+			window1PeakLocation = 0
+
+			window5Bits = &floatQueue{}
+			window5Seconds = &floatQueue{}
+			window5BitsSum = 0
+			window5SecondsSum = 0
+			window5PeakBitrate = 0
+			window5PeakLocation = 0
+
+			window10Bits = &floatQueue{}
+			window10Seconds = &floatQueue{}
+			window10BitsSum = 0
+			window10SecondsSum = 0
+			window10PeakBitrate = 0
+			window10PeakLocation = 0
+
+			chapterBits = 0
+			chapterSeconds = 0
+			chapterFrameCount = 0
+			chapterMaxFrameSize = 0
+			chapterMaxFrameLocation = 0
+		}
+	}
 }

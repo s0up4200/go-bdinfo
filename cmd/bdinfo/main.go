@@ -250,10 +250,17 @@ func scanAndReport(path string, settings settings.Settings) error {
 	}
 
 	playlists := make([]*bdrom.PlaylistFile, 0, len(rom.PlaylistFiles))
-	for _, pl := range rom.PlaylistFiles {
-		playlists = append(playlists, pl)
+	if len(rom.PlaylistOrder) > 0 {
+		for _, name := range rom.PlaylistOrder {
+			if pl, ok := rom.PlaylistFiles[name]; ok {
+				playlists = append(playlists, pl)
+			}
+		}
+	} else {
+		for _, pl := range rom.PlaylistFiles {
+			playlists = append(playlists, pl)
+		}
 	}
-
 	_, err = report.WriteReport("", rom, playlists, result, settings)
 	return err
 }

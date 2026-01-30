@@ -15,50 +15,51 @@ import (
 )
 
 type BDROM struct {
-	Path string
-	Settings settings.Settings
-	fileSystem fs.FileSystem
-	rootDirectory fs.DirectoryInfo
-	bdmvDirectory fs.DirectoryInfo
-	clipinfDirectory fs.DirectoryInfo
+	Path              string
+	Settings          settings.Settings
+	fileSystem        fs.FileSystem
+	rootDirectory     fs.DirectoryInfo
+	bdmvDirectory     fs.DirectoryInfo
+	clipinfDirectory  fs.DirectoryInfo
 	playlistDirectory fs.DirectoryInfo
-	streamDirectory fs.DirectoryInfo
-	ssifDirectory fs.DirectoryInfo
-	metaDirectory fs.DirectoryInfo
-	bdjoDirectory fs.DirectoryInfo
-	snpDirectory fs.DirectoryInfo
+	streamDirectory   fs.DirectoryInfo
+	ssifDirectory     fs.DirectoryInfo
+	metaDirectory     fs.DirectoryInfo
+	bdjoDirectory     fs.DirectoryInfo
+	snpDirectory      fs.DirectoryInfo
 
-	DirectoryRoot string
-	DirectoryBDMV string
-	DirectoryBDJO string
-	DirectoryCLIPINF string
+	DirectoryRoot     string
+	DirectoryBDMV     string
+	DirectoryBDJO     string
+	DirectoryCLIPINF  string
 	DirectoryPLAYLIST string
-	DirectorySNP string
-	DirectorySSIF string
-	DirectorySTREAM string
-	DirectoryMeta string
+	DirectorySNP      string
+	DirectorySSIF     string
+	DirectorySTREAM   string
+	DirectoryMeta     string
 
 	VolumeLabel string
-	DiscTitle string
-	Size uint64
-	IsBDPlus bool
-	IsBDJava bool
-	IsDBOX bool
-	IsPSP bool
-	Is3D bool
-	Is50Hz bool
-	IsUHD bool
+	DiscTitle   string
+	Size        uint64
+	IsBDPlus    bool
+	IsBDJava    bool
+	IsDBOX      bool
+	IsPSP       bool
+	Is3D        bool
+	Is50Hz      bool
+	IsUHD       bool
 
-	PlaylistFiles map[string]*PlaylistFile
-	StreamClipFiles map[string]*StreamClipFile
-	StreamFiles map[string]*StreamFile
+	PlaylistFiles    map[string]*PlaylistFile
+	PlaylistOrder    []string
+	StreamClipFiles  map[string]*StreamClipFile
+	StreamFiles      map[string]*StreamFile
 	InterleavedFiles map[string]*InterleavedFile
 
 	cleanup func()
 }
 
 type ScanResult struct {
-	ScanError error
+	ScanError  error
 	FileErrors map[string]error
 }
 
@@ -92,16 +93,17 @@ func New(path string, settings settings.Settings) (*BDROM, error) {
 	}
 
 	rom := &BDROM{
-		Path: path,
-		Settings: settings,
-		fileSystem: fileSystem,
-		rootDirectory: rootDir,
-		bdmvDirectory: bdmvDir,
-		PlaylistFiles: make(map[string]*PlaylistFile),
-		StreamClipFiles: make(map[string]*StreamClipFile),
-		StreamFiles: make(map[string]*StreamFile),
+		Path:             path,
+		Settings:         settings,
+		fileSystem:       fileSystem,
+		rootDirectory:    rootDir,
+		bdmvDirectory:    bdmvDir,
+		PlaylistFiles:    make(map[string]*PlaylistFile),
+		PlaylistOrder:    make([]string, 0),
+		StreamClipFiles:  make(map[string]*StreamClipFile),
+		StreamFiles:      make(map[string]*StreamFile),
 		InterleavedFiles: make(map[string]*InterleavedFile),
-		cleanup: cleanup,
+		cleanup:          cleanup,
 	}
 
 	rom.DirectoryRoot = rootDir.FullName()
@@ -193,11 +195,13 @@ func New(path string, settings settings.Settings) (*BDROM, error) {
 			for _, file := range files {
 				pl := NewPlaylistFile(file, settings)
 				rom.PlaylistFiles[pl.Name] = pl
+				rom.PlaylistOrder = append(rom.PlaylistOrder, pl.Name)
 			}
 		} else if files, err := rom.playlistDirectory.GetFilesPattern("*.MPLS"); err == nil {
 			for _, file := range files {
 				pl := NewPlaylistFile(file, settings)
 				rom.PlaylistFiles[pl.Name] = pl
+				rom.PlaylistOrder = append(rom.PlaylistOrder, pl.Name)
 			}
 		}
 	}
@@ -466,7 +470,7 @@ func readDiscTitleFS(metaDir fs.DirectoryInfo) string {
 	}
 	var doc struct {
 		XMLName xml.Name `xml:"discinfo"`
-		Title struct {
+		Title   struct {
 			Name string `xml:"name"`
 		} `xml:"title"`
 	}

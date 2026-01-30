@@ -20,8 +20,8 @@ type StreamClipFile struct {
 func NewStreamClipFile(fileInfo fs.FileInfo) *StreamClipFile {
 	return &StreamClipFile{
 		FileInfo: fileInfo,
-		Name:    strings.ToUpper(fileInfo.Name()),
-		Streams: make(map[uint16]stream.Info),
+		Name:     strings.ToUpper(fileInfo.Name()),
+		Streams:  make(map[uint16]stream.Info),
 	}
 }
 
@@ -130,7 +130,10 @@ func (s *StreamClipFile) Scan() error {
 			st.Base().StreamType = streamType
 			s.Streams[pid] = st
 		}
-		offset += 4
+		if offset >= len(clipData) {
+			break
+		}
+		offset += int(clipData[offset]) + 1
 	}
 	return nil
 }

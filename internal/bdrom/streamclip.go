@@ -1,29 +1,31 @@
 package bdrom
 
 import (
+	"math"
+
 	"github.com/autobrr/go-bdinfo/internal/settings"
 )
 
 type StreamClip struct {
-	Settings settings.Settings
-	AngleIndex int
-	Name string
-	TimeIn float64
-	TimeOut float64
-	RelativeTimeIn float64
+	Settings        settings.Settings
+	AngleIndex      int
+	Name            string
+	TimeIn          float64
+	TimeOut         float64
+	RelativeTimeIn  float64
 	RelativeTimeOut float64
-	Length float64
-	RelativeLength float64
+	Length          float64
+	RelativeLength  float64
 
-	FileSize uint64
+	FileSize            uint64
 	InterleavedFileSize uint64
-	PayloadBytes uint64
-	PacketCount uint64
-	PacketSeconds float64
+	PayloadBytes        uint64
+	PacketCount         uint64
+	PacketSeconds       float64
 
 	Chapters []float64
 
-	StreamFile *StreamFile
+	StreamFile     *StreamFile
 	StreamClipFile *StreamClipFile
 }
 
@@ -56,7 +58,7 @@ func (s *StreamClip) PacketSize() uint64 {
 
 func (s *StreamClip) PacketBitRate() uint64 {
 	if s.PacketSeconds > 0 {
-		return uint64(float64(s.PacketSize()) * 8.0 / s.PacketSeconds)
+		return uint64(math.RoundToEven(float64(s.PacketSize()) * 8.0 / s.PacketSeconds))
 	}
 	return 0
 }

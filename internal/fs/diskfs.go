@@ -97,33 +97,40 @@ func (d *diskDirectoryInfo) FullName() string {
 }
 
 func (d *diskDirectoryInfo) GetFiles() ([]FileInfo, error) {
-	entries, err := os.ReadDir(d.path)
+	dir, err := os.Open(d.path)
 	if err != nil {
 		return nil, err
 	}
-	
+	defer dir.Close()
+	entries, err := dir.Readdir(-1)
+	if err != nil {
+		return nil, err
+	}
+
 	var files []FileInfo
 	for _, entry := range entries {
-		if !entry.IsDir() {
-			info, err := entry.Info()
-			if err != nil {
-				continue
-			}
-			files = append(files, &diskFileInfo{
-				path: filepath.Join(d.path, entry.Name()),
-				info: info,
-			})
+		if entry.IsDir() {
+			continue
 		}
+		files = append(files, &diskFileInfo{
+			path: filepath.Join(d.path, entry.Name()),
+			info: entry,
+		})
 	}
 	return files, nil
 }
 
 func (d *diskDirectoryInfo) GetDirectories() ([]DirectoryInfo, error) {
-	entries, err := os.ReadDir(d.path)
+	dir, err := os.Open(d.path)
 	if err != nil {
 		return nil, err
 	}
-	
+	defer dir.Close()
+	entries, err := dir.Readdir(-1)
+	if err != nil {
+		return nil, err
+	}
+
 	var dirs []DirectoryInfo
 	for _, entry := range entries {
 		if entry.IsDir() {
@@ -136,28 +143,30 @@ func (d *diskDirectoryInfo) GetDirectories() ([]DirectoryInfo, error) {
 }
 
 func (d *diskDirectoryInfo) GetFilesPattern(pattern string) ([]FileInfo, error) {
-	entries, err := os.ReadDir(d.path)
+	dir, err := os.Open(d.path)
 	if err != nil {
 		return nil, err
 	}
-	
+	defer dir.Close()
+	entries, err := dir.Readdir(-1)
+	if err != nil {
+		return nil, err
+	}
+
 	var files []FileInfo
 	for _, entry := range entries {
-		if !entry.IsDir() {
-			matched, err := filepath.Match(pattern, entry.Name())
-			if err != nil {
-				return nil, err
-			}
-			if matched {
-				info, err := entry.Info()
-				if err != nil {
-					continue
-				}
-				files = append(files, &diskFileInfo{
-					path: filepath.Join(d.path, entry.Name()),
-					info: info,
-				})
-			}
+		if entry.IsDir() {
+			continue
+		}
+		matched, err := filepath.Match(pattern, entry.Name())
+		if err != nil {
+			return nil, err
+		}
+		if matched {
+			files = append(files, &diskFileInfo{
+				path: filepath.Join(d.path, entry.Name()),
+				info: entry,
+			})
 		}
 	}
 	return files, nil

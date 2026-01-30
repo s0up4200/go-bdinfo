@@ -13,48 +13,48 @@ import (
 )
 
 type PlaylistFile struct {
-	FileInfo fs.FileInfo
-	Name string
-	FileType string
-	IsInitialized bool
-	Settings settings.Settings
+	FileInfo        fs.FileInfo
+	Name            string
+	FileType        string
+	IsInitialized   bool
+	Settings        settings.Settings
 	HasHiddenTracks bool
-	HasLoops bool
-	IsCustom bool
-	MVCBaseViewR bool
+	HasLoops        bool
+	IsCustom        bool
+	MVCBaseViewR    bool
 
 	Chapters []float64
 
-	Streams map[uint16]stream.Info
+	Streams         map[uint16]stream.Info
 	PlaylistStreams map[uint16]stream.Info
-	StreamClips []*StreamClip
-	AngleStreams []map[uint16]stream.Info
-	AngleClips []map[float64]*StreamClip
-	AngleCount int
+	StreamClips     []*StreamClip
+	AngleStreams    []map[uint16]stream.Info
+	AngleClips      []map[float64]*StreamClip
+	AngleCount      int
 
-	SortedStreams []stream.Info
-	VideoStreams []*stream.VideoStream
-	AudioStreams []*stream.AudioStream
-	TextStreams []*stream.TextStream
+	SortedStreams   []stream.Info
+	VideoStreams    []*stream.VideoStream
+	AudioStreams    []*stream.AudioStream
+	TextStreams     []*stream.TextStream
 	GraphicsStreams []*stream.GraphicsStream
 }
 
 func NewPlaylistFile(fileInfo fs.FileInfo, settings settings.Settings) *PlaylistFile {
 	return &PlaylistFile{
-		FileInfo: fileInfo,
-		Name: strings.ToUpper(fileInfo.Name()),
-		Settings: settings,
-		Streams: make(map[uint16]stream.Info),
+		FileInfo:        fileInfo,
+		Name:            strings.ToUpper(fileInfo.Name()),
+		Settings:        settings,
+		Streams:         make(map[uint16]stream.Info),
 		PlaylistStreams: make(map[uint16]stream.Info),
 	}
 }
 
 func NewCustomPlaylist(name string, clips []*StreamClip, settings settings.Settings) *PlaylistFile {
 	pl := &PlaylistFile{
-		Name: name,
-		IsCustom: true,
-		Settings: settings,
-		Streams: make(map[uint16]stream.Info),
+		Name:            name,
+		IsCustom:        true,
+		Settings:        settings,
+		Streams:         make(map[uint16]stream.Info),
 		PlaylistStreams: make(map[uint16]stream.Info),
 	}
 	for _, clip := range clips {
@@ -83,9 +83,7 @@ func NewCustomPlaylist(name string, clips []*StreamClip, settings settings.Setti
 func (p *PlaylistFile) FileSize() uint64 {
 	var size uint64
 	for _, clip := range p.StreamClips {
-		if clip.AngleIndex == 0 {
-			size += clip.FileSize
-		}
+		size += clip.FileSize
 	}
 	return size
 }
@@ -367,7 +365,7 @@ func (p *PlaylistFile) Scan(streamFiles map[string]*StreamFile, clipFiles map[st
 					}
 				}
 			}
-			pos += 12
+			pos += 14
 		}
 	}
 
@@ -399,6 +397,7 @@ func (p *PlaylistFile) Initialize() {
 			clipTimes[clip.Name] = []float64{clip.TimeIn}
 		}
 	}
+	p.ClearBitrates()
 	p.IsInitialized = true
 }
 
@@ -480,12 +479,9 @@ func (p *PlaylistFile) loadStreamClips() {
 		return
 	}
 
-	p.Streams = make(map[uint16]stream.Info)
-	p.VideoStreams = nil
-	p.AudioStreams = nil
-	p.GraphicsStreams = nil
-	p.TextStreams = nil
-	p.SortedStreams = nil
+	if p.Streams == nil {
+		p.Streams = make(map[uint16]stream.Info)
+	}
 
 	for pid, clipStream := range reference.StreamClipFile.Streams {
 		if _, ok := p.Streams[pid]; ok {
@@ -499,17 +495,6 @@ func (p *PlaylistFile) loadStreamClips() {
 				p.HasHiddenTracks = true
 			}
 		}
-
-		switch st := streamClone.(type) {
-		case *stream.VideoStream:
-			p.VideoStreams = append(p.VideoStreams, st)
-		case *stream.AudioStream:
-			p.AudioStreams = append(p.AudioStreams, st)
-		case *stream.GraphicsStream:
-			p.GraphicsStreams = append(p.GraphicsStreams, st)
-		case *stream.TextStream:
-			p.TextStreams = append(p.TextStreams, st)
-		}
 	}
 
 	if reference.StreamFile != nil {
@@ -518,9 +503,6 @@ func (p *PlaylistFile) loadStreamClips() {
 				if _, exists := p.Streams[4114]; !exists {
 					clone := ssifStream.Clone()
 					p.Streams[4114] = clone
-					if vs, ok := clone.(*stream.VideoStream); ok {
-						p.VideoStreams = append(p.VideoStreams, vs)
-					}
 				}
 			}
 		}
@@ -571,6 +553,25 @@ func (p *PlaylistFile) loadStreamClips() {
 					}
 				}
 			}
+		}
+	}
+
+	p.VideoStreams = p.VideoStreams[:0]
+	p.AudioStreams = p.AudioStreams[:0]
+	p.GraphicsStreams = p.GraphicsStreams[:0]
+	p.TextStreams = p.TextStreams[:0]
+	p.SortedStreams = p.SortedStreams[:0]
+
+	for _, streamInfo := range p.Streams {
+		switch st := streamInfo.(type) {
+		case *stream.VideoStream:
+			p.VideoStreams = append(p.VideoStreams, st)
+		case *stream.AudioStream:
+			p.AudioStreams = append(p.AudioStreams, st)
+		case *stream.GraphicsStream:
+			p.GraphicsStreams = append(p.GraphicsStreams, st)
+		case *stream.TextStream:
+			p.TextStreams = append(p.TextStreams, st)
 		}
 	}
 
@@ -705,10 +706,10 @@ func compareAudioStreams(x, y *stream.AudioStream) int {
 		return 0
 	}
 	if x == nil {
-		return 1
+		return -1
 	}
 	if y == nil {
-		return -1
+		return 1
 	}
 	if x.ChannelCount > y.ChannelCount {
 		return -1
@@ -716,10 +717,27 @@ func compareAudioStreams(x, y *stream.AudioStream) int {
 	if y.ChannelCount > x.ChannelCount {
 		return 1
 	}
-	if x.StreamType < y.StreamType {
+	sortX := streamTypeSortIndex(x.StreamType)
+	sortY := streamTypeSortIndex(y.StreamType)
+	if sortX > sortY {
 		return -1
 	}
-	if x.StreamType > y.StreamType {
+	if sortY > sortX {
+		return 1
+	}
+	if x.LanguageCode() == "eng" {
+		return -1
+	}
+	if y.LanguageCode() == "eng" {
+		return 1
+	}
+	if x.LanguageCode() != y.LanguageCode() {
+		return strings.Compare(x.LanguageName, y.LanguageName)
+	}
+	if x.PID < y.PID {
+		return -1
+	}
+	if y.PID < x.PID {
 		return 1
 	}
 	return 0
@@ -755,16 +773,33 @@ func compareGraphicsStreams(x, y *stream.GraphicsStream) int {
 		return 0
 	}
 	if x == nil {
-		return 1
+		return -1
 	}
 	if y == nil {
-		return -1
-	}
-	if x.StreamType < y.StreamType {
-		return -1
-	}
-	if x.StreamType > y.StreamType {
 		return 1
+	}
+	sortX := streamTypeSortIndex(x.StreamType)
+	sortY := streamTypeSortIndex(y.StreamType)
+	if sortX > sortY {
+		return -1
+	}
+	if sortY > sortX {
+		return 1
+	}
+	if x.LanguageCode() == "eng" {
+		return -1
+	}
+	if y.LanguageCode() == "eng" {
+		return 1
+	}
+	if x.LanguageCode() != y.LanguageCode() {
+		return strings.Compare(x.LanguageName, y.LanguageName)
+	}
+	if x.PID > y.PID {
+		return 1
+	}
+	if y.PID > x.PID {
+		return -1
 	}
 	return 0
 }
@@ -774,16 +809,78 @@ func compareTextStreams(x, y *stream.TextStream) int {
 		return 0
 	}
 	if x == nil {
-		return 1
+		return -1
 	}
 	if y == nil {
-		return -1
-	}
-	if x.StreamType < y.StreamType {
-		return -1
-	}
-	if x.StreamType > y.StreamType {
 		return 1
 	}
+	if x.LanguageCode() == "eng" {
+		return -1
+	}
+	if y.LanguageCode() == "eng" {
+		return 1
+	}
+	if x.LanguageCode() != y.LanguageCode() {
+		return strings.Compare(x.LanguageName, y.LanguageName)
+	}
+	if x.PID > y.PID {
+		return 1
+	}
+	if y.PID > x.PID {
+		return -1
+	}
 	return 0
+}
+
+func streamTypeSortIndex(streamType stream.StreamType) int {
+	switch streamType {
+	case stream.StreamTypeUnknown:
+		return 0
+	case stream.StreamTypeMPEG1Video:
+		return 1
+	case stream.StreamTypeMPEG2Video:
+		return 2
+	case stream.StreamTypeAVCVideo:
+		return 3
+	case stream.StreamTypeVC1Video:
+		return 4
+	case stream.StreamTypeMVCVideo:
+		return 5
+	case stream.StreamTypeHEVCVideo:
+		return 6
+	case stream.StreamTypeMPEG1Audio:
+		return 1
+	case stream.StreamTypeMPEG2Audio:
+		return 2
+	case stream.StreamTypeAC3PlusSecondaryAudio:
+		return 3
+	case stream.StreamTypeDTSHDSecondaryAudio:
+		return 4
+	case stream.StreamTypeAC3Audio:
+		return 5
+	case stream.StreamTypeDTSAudio:
+		return 6
+	case stream.StreamTypeAC3PlusAudio:
+		return 7
+	case stream.StreamTypeMPEG2AACAudio:
+		return 8
+	case stream.StreamTypeMPEG4AACAudio:
+		return 9
+	case stream.StreamTypeDTSHDAudio:
+		return 10
+	case stream.StreamTypeAC3TrueHDAudio:
+		return 11
+	case stream.StreamTypeDTSHDMasterAudio:
+		return 12
+	case stream.StreamTypeLPCMAudio:
+		return 13
+	case stream.StreamTypeSubtitle:
+		return 1
+	case stream.StreamTypeInteractiveGraphics:
+		return 2
+	case stream.StreamTypePresentationGraphics:
+		return 3
+	default:
+		return 0
+	}
 }

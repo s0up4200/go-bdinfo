@@ -41,8 +41,9 @@ type rootOptions struct {
 var opts rootOptions
 
 var rootCmd = &cobra.Command{
-	Use:           "bdinfo",
+	Use:           "bdinfo <path>",
 	Short:         "Go rewrite of BDInfo.",
+	Args:          cobra.ExactArgs(1),
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	RunE:          runRoot,
@@ -72,7 +73,6 @@ func init() {
 	rootCmd.SetOut(os.Stdout)
 	rootCmd.SetErr(os.Stderr)
 
-	rootCmd.Flags().StringVarP(&opts.path, "path", "p", "", "The path to iso or bluray folder")
 	rootCmd.Flags().StringVarP(&opts.reportFile, "reportfilename", "o", "", "The report filename with extension")
 	rootCmd.Flags().BoolVarP(&opts.genDiag, "generatestreamdiagnostics", "g", false, "Generate the stream diagnostics")
 	rootCmd.Flags().BoolVarP(&opts.extDiag, "extendedstreamdiagnostics", "e", false, "Generate the extended stream diagnostics")
@@ -106,9 +106,7 @@ func runRoot(cmd *cobra.Command, args []string) error {
 		return runSelfUpdate(cmd.Context())
 	}
 
-	if opts.path == "" {
-		return errors.New("path is required")
-	}
+	opts.path = args[0]
 
 	cwd, _ := os.Getwd()
 	s := settings.Default(cwd)

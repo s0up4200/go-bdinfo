@@ -16,18 +16,19 @@ curl -sL "$(curl -s https://api.github.com/repos/s0up4200/go-bdinfo/releases/lat
 ## Usage
 
 ```sh
-bdinfo --main -p /path/to/bluray
-bdinfo --forumsonly --main -p /path/to/bluray
-bdinfo --summaryonly -p /path/to/bluray
+bdinfo /path/to/bluray --main
+bdinfo /path/to/bluray --forumsonly --main
+bdinfo /path/to/bluray --summaryonly
 bdinfo update
 bdinfo version
 ```
+
+Path is required (ISO file or Blu-ray folder).
 
 Report default: `BDInfo_{0}.bdinfo` (disc label substituted).
 
 ## Options
 
-- `-p, --path` (required)
 - `-o, --reportfilename`
 - `--main` (only main playlist; likely what you want)
 - `-f, --forumsonly` (only forums paste block)

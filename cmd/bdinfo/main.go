@@ -3,15 +3,15 @@ package main
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/blang/semver"
 	"github.com/creativeprojects/go-selfupdate"
+	"github.com/spf13/cobra"
+
 	"github.com/s0up4200/go-bdinfo/internal/bdrom"
 	"github.com/s0up4200/go-bdinfo/internal/report"
 	"github.com/s0up4200/go-bdinfo/internal/settings"
@@ -19,164 +19,143 @@ import (
 
 var version = "dev"
 
-type optBool struct {
-	set   bool
-	value bool
+type rootOptions struct {
+	path             string
+	reportFile       string
+	filterShortValue int
+	genDiag          bool
+	extDiag          bool
+	enableSSIF       bool
+	filterLooping    bool
+	filterShort      bool
+	keepOrder        bool
+	genSummary       bool
+	includeNotes     bool
+	groupByTime      bool
+	forumsOnly       bool
+	mainOnly         bool
+	summaryOnly      bool
+	selfUpdate       bool
 }
 
-func (o *optBool) Set(s string) error {
-	if s == "" {
-		o.value = true
-		o.set = true
-		return nil
-	}
-	if s == "true" || s == "1" {
-		o.value = true
-		o.set = true
-		return nil
-	}
-	if s == "false" || s == "0" {
-		o.value = false
-		o.set = true
-		return nil
-	}
-	return fmt.Errorf("invalid boolean %q", s)
+var opts rootOptions
+
+var rootCmd = &cobra.Command{
+	Use:           "bdinfo",
+	Short:         "Go rewrite of BDInfo.",
+	SilenceUsage:  true,
+	SilenceErrors: true,
+	RunE:          runRoot,
 }
 
-func (o *optBool) String() string {
-	if !o.set {
-		return ""
-	}
-	if o.value {
-		return "true"
-	}
-	return "false"
+var updateCmd = &cobra.Command{
+	Use:   "update",
+	Short: "Update bdinfo",
+	Long:  "Update bdinfo to latest version.",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runSelfUpdate(cmd.Context())
+	},
+	DisableFlagsInUseLine: true,
 }
 
-func (o *optBool) IsBoolFlag() bool { return true }
+var versionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Print version information",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		fmt.Fprintf(cmd.OutOrStdout(), "bdinfo version: %s\n", version)
+		return nil
+	},
+	DisableFlagsInUseLine: true,
+}
+
+func init() {
+	rootCmd.SetOut(os.Stdout)
+	rootCmd.SetErr(os.Stderr)
+
+	rootCmd.Flags().StringVarP(&opts.path, "path", "p", "", "The path to iso or bluray folder")
+	rootCmd.Flags().StringVarP(&opts.reportFile, "reportfilename", "o", "", "The report filename with extension")
+	rootCmd.Flags().BoolVarP(&opts.genDiag, "generatestreamdiagnostics", "g", false, "Generate the stream diagnostics")
+	rootCmd.Flags().BoolVarP(&opts.extDiag, "extendedstreamdiagnostics", "e", false, "Generate the extended stream diagnostics")
+	rootCmd.Flags().BoolVarP(&opts.enableSSIF, "enablessif", "b", false, "Enable SSIF support")
+	rootCmd.Flags().BoolVarP(&opts.filterLooping, "filterloopingplaylists", "l", false, "Filter looping playlist")
+	rootCmd.Flags().BoolVarP(&opts.filterShort, "filtershortplaylist", "y", false, "Filter short playlist")
+	rootCmd.Flags().IntVarP(&opts.filterShortValue, "filtershortplaylistvalue", "v", 20, "Filter number of short playlist")
+	rootCmd.Flags().BoolVarP(&opts.keepOrder, "keepstreamorder", "k", false, "Keep stream order")
+	rootCmd.Flags().BoolVarP(&opts.genSummary, "generatetextsummary", "m", false, "Generate summary")
+	rootCmd.Flags().BoolVarP(&opts.includeNotes, "includeversionandnotes", "q", false, "Include version and notes inside report")
+	rootCmd.Flags().BoolVarP(&opts.groupByTime, "groupbytime", "j", false, "Group by time")
+	rootCmd.Flags().BoolVarP(&opts.forumsOnly, "forumsonly", "f", false, "Output only the forums paste block")
+	rootCmd.Flags().BoolVar(&opts.mainOnly, "main", false, "Output only the main playlist (likely what you want)")
+	rootCmd.Flags().BoolVarP(&opts.summaryOnly, "summaryonly", "s", false, "Output only the quick summary block (likely what you want)")
+	rootCmd.Flags().BoolVar(&opts.selfUpdate, "self-update", false, "Update bdinfo to latest version")
+	rootCmd.Flags().BoolVar(&opts.selfUpdate, "update", false, "Update bdinfo to latest version")
+
+	rootCmd.AddCommand(updateCmd)
+	rootCmd.AddCommand(versionCmd)
+}
 
 func main() {
-	if err := run(os.Args[1:]); err != nil {
+	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
 		os.Exit(1)
 	}
 }
 
-func run(args []string) error {
-	fs := flag.NewFlagSet("bdinfo", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-
-	var pathLong string
-	var pathShort string
-	var reportFile string
-	var filterShortValue int
-
-	var genDiag optBool
-	var extDiag optBool
-	var enableSSIF optBool
-	var filterLooping optBool
-	var filterShort optBool
-	var keepOrder optBool
-	var genSummary optBool
-	var includeNotes optBool
-	var groupByTime optBool
-	var forumsOnly optBool
-	var mainOnly optBool
-	var summaryOnly optBool
-	var selfUpdate bool
-
-	fs.StringVar(&pathLong, "path", "", "The path to iso or bluray folder")
-	fs.StringVar(&pathShort, "p", "", "The path to iso or bluray folder")
-	fs.Var(&genDiag, "generatestreamdiagnostics", "Generate the stream diagnostics")
-	fs.Var(&genDiag, "g", "Generate the stream diagnostics")
-	fs.Var(&extDiag, "extendedstreamdiagnostics", "Generate the extended stream diagnostics")
-	fs.Var(&extDiag, "e", "Generate the extended stream diagnostics")
-	fs.Var(&enableSSIF, "enablessif", "Enable SSIF support")
-	fs.Var(&enableSSIF, "b", "Enable SSIF support")
-	fs.Var(&filterLooping, "filterloopingplaylists", "Filter looping playlist")
-	fs.Var(&filterLooping, "l", "Filter looping playlist")
-	fs.Var(&filterShort, "filtershortplaylist", "Filter short playlist")
-	fs.Var(&filterShort, "y", "Filter short playlist")
-	fs.IntVar(&filterShortValue, "filtershortplaylistvalue", 20, "Filter number of short playlist")
-	fs.IntVar(&filterShortValue, "v", 20, "Filter number of short playlist")
-	fs.Var(&keepOrder, "keepstreamorder", "Keep stream order")
-	fs.Var(&keepOrder, "k", "Keep stream order")
-	fs.Var(&genSummary, "generatetextsummary", "Generate summary")
-	fs.Var(&genSummary, "m", "Generate summary")
-	fs.StringVar(&reportFile, "reportfilename", "", "The report filename with extension")
-	fs.StringVar(&reportFile, "o", "", "The report filename with extension")
-	fs.Var(&includeNotes, "includeversionandnotes", "Include version and notes inside report")
-	fs.Var(&includeNotes, "q", "Include version and notes inside report")
-	fs.Var(&groupByTime, "groupbytime", "Group by time")
-	fs.Var(&groupByTime, "j", "Group by time")
-	fs.Var(&forumsOnly, "forumsonly", "Output only the forums paste block")
-	fs.Var(&forumsOnly, "f", "Output only the forums paste block")
-	fs.Var(&mainOnly, "main", "Output only the main playlist (likely what you want)")
-	fs.Var(&summaryOnly, "summaryonly", "Output only the quick summary block (likely what you want)")
-	fs.Var(&summaryOnly, "s", "Output only the quick summary block (likely what you want)")
-	fs.BoolVar(&selfUpdate, "self-update", false, "Update bdinfo to latest version")
-	fs.BoolVar(&selfUpdate, "update", false, "Update bdinfo to latest version")
-
-	if err := fs.Parse(args); err != nil {
-		return err
+func runRoot(cmd *cobra.Command, args []string) error {
+	if opts.selfUpdate {
+		return runSelfUpdate(cmd.Context())
 	}
 
-	if selfUpdate {
-		return runSelfUpdate(context.Background())
-	}
-
-	path := pathLong
-	if path == "" {
-		path = pathShort
-	}
-	if path == "" {
+	if opts.path == "" {
 		return errors.New("path is required")
 	}
 
 	cwd, _ := os.Getwd()
 	s := settings.Default(cwd)
-	if genDiag.set {
-		s.GenerateStreamDiagnostics = genDiag.value
+
+	flags := cmd.Flags()
+	if flags.Changed("generatestreamdiagnostics") {
+		s.GenerateStreamDiagnostics = opts.genDiag
 	}
-	if extDiag.set {
-		s.ExtendedStreamDiagnostics = extDiag.value
+	if flags.Changed("extendedstreamdiagnostics") {
+		s.ExtendedStreamDiagnostics = opts.extDiag
 	}
-	if enableSSIF.set {
-		s.EnableSSIF = enableSSIF.value
+	if flags.Changed("enablessif") {
+		s.EnableSSIF = opts.enableSSIF
 	}
-	if filterLooping.set {
-		s.FilterLoopingPlaylists = filterLooping.value
+	if flags.Changed("filterloopingplaylists") {
+		s.FilterLoopingPlaylists = opts.filterLooping
 	}
-	if filterShort.set {
-		s.FilterShortPlaylists = filterShort.value
+	if flags.Changed("filtershortplaylist") {
+		s.FilterShortPlaylists = opts.filterShort
 	}
-	s.FilterShortPlaylistsVal = filterShortValue
-	if keepOrder.set {
-		s.KeepStreamOrder = keepOrder.value
+	s.FilterShortPlaylistsVal = opts.filterShortValue
+	if flags.Changed("keepstreamorder") {
+		s.KeepStreamOrder = opts.keepOrder
 	}
-	if genSummary.set {
-		s.GenerateTextSummary = genSummary.value
+	if flags.Changed("generatetextsummary") {
+		s.GenerateTextSummary = opts.genSummary
 	}
-	if reportFile != "" {
-		s.ReportFileName = reportFile
+	if opts.reportFile != "" {
+		s.ReportFileName = opts.reportFile
 	}
-	if includeNotes.set {
-		s.IncludeVersionAndNotes = includeNotes.value
+	if flags.Changed("includeversionandnotes") {
+		s.IncludeVersionAndNotes = opts.includeNotes
 	}
-	if groupByTime.set {
-		s.GroupByTime = groupByTime.value
+	if flags.Changed("groupbytime") {
+		s.GroupByTime = opts.groupByTime
 	}
-	if forumsOnly.set {
-		s.ForumsOnly = forumsOnly.value
+	if flags.Changed("forumsonly") {
+		s.ForumsOnly = opts.forumsOnly
 	}
-	if mainOnly.set {
-		s.MainPlaylistOnly = mainOnly.value
+	if flags.Changed("main") {
+		s.MainPlaylistOnly = opts.mainOnly
 	}
-	if summaryOnly.set {
-		s.SummaryOnly = summaryOnly.value
+	if flags.Changed("summaryonly") {
+		s.SummaryOnly = opts.summaryOnly
 	}
 
-	return runForPath(path, s)
+	return runForPath(opts.path, s)
 }
 
 func runSelfUpdate(ctx context.Context) error {

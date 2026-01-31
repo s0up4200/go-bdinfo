@@ -27,6 +27,7 @@ Report default: `BDInfo_{0}.bdinfo` (disc label substituted).
 - `-j, --groupbytime`
 - `-g, --generatestreamdiagnostics`
 - `-e, --extendedstreamdiagnostics`
+- `--self-update` (update to latest release)
 
 ## Install
 

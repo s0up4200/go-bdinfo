@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -9,10 +10,14 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/blang/semver"
+	"github.com/creativeprojects/go-selfupdate"
 	"github.com/s0up4200/go-bdinfo/internal/bdrom"
 	"github.com/s0up4200/go-bdinfo/internal/report"
 	"github.com/s0up4200/go-bdinfo/internal/settings"
 )
+
+var version = "dev"
 
 type optBool struct {
 	set   bool
@@ -78,6 +83,7 @@ func run(args []string) error {
 	var forumsOnly optBool
 	var mainOnly optBool
 	var summaryOnly optBool
+	var selfUpdate bool
 
 	fs.StringVar(&pathLong, "path", "", "The path to iso or bluray folder")
 	fs.StringVar(&pathShort, "p", "", "The path to iso or bluray folder")
@@ -108,9 +114,15 @@ func run(args []string) error {
 	fs.Var(&mainOnly, "main", "Output only the main playlist (likely what you want)")
 	fs.Var(&summaryOnly, "summaryonly", "Output only the quick summary block (likely what you want)")
 	fs.Var(&summaryOnly, "s", "Output only the quick summary block (likely what you want)")
+	fs.BoolVar(&selfUpdate, "self-update", false, "Update bdinfo to latest version")
+	fs.BoolVar(&selfUpdate, "update", false, "Update bdinfo to latest version")
 
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+
+	if selfUpdate {
+		return runSelfUpdate(context.Background())
 	}
 
 	path := pathLong
@@ -165,6 +177,41 @@ func run(args []string) error {
 	}
 
 	return runForPath(path, s)
+}
+
+func runSelfUpdate(ctx context.Context) error {
+	if version == "" || version == "dev" {
+		return errors.New("self-update is only available in release builds")
+	}
+
+	if _, err := semver.ParseTolerant(version); err != nil {
+		return fmt.Errorf("could not parse version: %w", err)
+	}
+
+	latest, found, err := selfupdate.DetectLatest(ctx, selfupdate.ParseSlug("s0up4200/go-bdinfo"))
+	if err != nil {
+		return fmt.Errorf("error occurred while detecting version: %w", err)
+	}
+	if !found {
+		return fmt.Errorf("latest version for %s/%s could not be found from github repository", "s0up4200/go-bdinfo", version)
+	}
+
+	if latest.LessOrEqual(version) {
+		fmt.Printf("Current binary is the latest version: %s\n", version)
+		return nil
+	}
+
+	exe, err := selfupdate.ExecutablePath()
+	if err != nil {
+		return fmt.Errorf("could not locate executable path: %w", err)
+	}
+
+	if err := selfupdate.UpdateTo(ctx, latest.AssetURL, latest.AssetName, exe); err != nil {
+		return fmt.Errorf("error occurred while updating binary: %w", err)
+	}
+
+	fmt.Printf("Successfully updated to version: %s\n", latest.Version())
+	return nil
 }
 
 func runForPath(path string, settings settings.Settings) error {

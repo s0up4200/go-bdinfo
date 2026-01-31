@@ -27,3 +27,9 @@ Report default: `BDInfo_{0}.bdinfo` (disc label substituted).
 - `-j, --groupbytime`
 - `-g, --generatestreamdiagnostics`
 - `-e, --extendedstreamdiagnostics`
+
+## Releasing
+
+- Tag a release like `vX.Y.Z`.
+- GitHub Actions runs GoReleaser.
+- Homebrew cask publishes to `s0up4200/homebrew-bdinfo` and requires `HOMEBREW_TAP_GITHUB_TOKEN`.

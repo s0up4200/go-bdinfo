@@ -1,6 +1,6 @@
 package codec
 
-import "github.com/autobrr/go-bdinfo/internal/stream"
+import "github.com/s0up4200/go-bdinfo/internal/stream"
 
 func ScanAVC(v *stream.VideoStream, data []byte, tag *string) {
 	parse := uint32(0)

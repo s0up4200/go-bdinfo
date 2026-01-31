@@ -3,7 +3,7 @@ package bdrom
 import (
 	"math"
 
-	"github.com/autobrr/go-bdinfo/internal/settings"
+	"github.com/s0up4200/go-bdinfo/internal/settings"
 )
 
 type StreamClip struct {

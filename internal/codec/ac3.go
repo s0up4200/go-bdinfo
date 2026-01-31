@@ -1,8 +1,8 @@
 package codec
 
 import (
-	"github.com/autobrr/go-bdinfo/internal/buffer"
-	"github.com/autobrr/go-bdinfo/internal/stream"
+	"github.com/s0up4200/go-bdinfo/internal/buffer"
+	"github.com/s0up4200/go-bdinfo/internal/stream"
 )
 
 var ac3BitrateKbps = []int{32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, 448, 512, 576, 640}

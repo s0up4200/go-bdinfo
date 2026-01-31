@@ -7,10 +7,10 @@ import (
 	"math"
 	"strings"
 
-	"github.com/autobrr/go-bdinfo/internal/codec"
-	"github.com/autobrr/go-bdinfo/internal/fs"
-	"github.com/autobrr/go-bdinfo/internal/settings"
-	"github.com/autobrr/go-bdinfo/internal/stream"
+	"github.com/s0up4200/go-bdinfo/internal/codec"
+	"github.com/s0up4200/go-bdinfo/internal/fs"
+	"github.com/s0up4200/go-bdinfo/internal/settings"
+	"github.com/s0up4200/go-bdinfo/internal/stream"
 )
 
 const maxStreamData = 5 * 1024 * 1024

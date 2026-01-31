@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/autobrr/go-bdinfo/internal/bdrom"
-	"github.com/autobrr/go-bdinfo/internal/settings"
-	"github.com/autobrr/go-bdinfo/internal/stream"
-	"github.com/autobrr/go-bdinfo/internal/util"
+	"github.com/s0up4200/go-bdinfo/internal/bdrom"
+	"github.com/s0up4200/go-bdinfo/internal/settings"
+	"github.com/s0up4200/go-bdinfo/internal/stream"
+	"github.com/s0up4200/go-bdinfo/internal/util"
 )
 
 const productVersion = "0.8.0.0"

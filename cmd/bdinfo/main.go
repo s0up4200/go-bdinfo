@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/autobrr/go-bdinfo/internal/bdrom"
-	"github.com/autobrr/go-bdinfo/internal/report"
-	"github.com/autobrr/go-bdinfo/internal/settings"
+	"github.com/s0up4200/go-bdinfo/internal/bdrom"
+	"github.com/s0up4200/go-bdinfo/internal/report"
+	"github.com/s0up4200/go-bdinfo/internal/settings"
 )
 
 type optBool struct {

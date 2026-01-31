@@ -5,8 +5,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/autobrr/go-bdinfo/internal/fs"
-	"github.com/autobrr/go-bdinfo/internal/stream"
+	"github.com/s0up4200/go-bdinfo/internal/fs"
+	"github.com/s0up4200/go-bdinfo/internal/stream"
 )
 
 type StreamClipFile struct {

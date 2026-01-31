@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/autobrr/go-bdinfo/internal/buffer"
-	"github.com/autobrr/go-bdinfo/internal/settings"
-	"github.com/autobrr/go-bdinfo/internal/stream"
+	"github.com/s0up4200/go-bdinfo/internal/buffer"
+	"github.com/s0up4200/go-bdinfo/internal/settings"
+	"github.com/s0up4200/go-bdinfo/internal/stream"
 )
 
 const (

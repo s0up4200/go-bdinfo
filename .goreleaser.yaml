@@ -53,9 +53,9 @@ homebrew_casks:
   - name: bdinfo
     binaries:
       - bdinfo
-    homepage: "https://github.com/autobrr/go-bdinfo"
+    homepage: "https://github.com/s0up4200/go-bdinfo"
     description: "Go rewrite of BDInfo."
     repository:
-      owner: autobrr
+      owner: s0up4200
       name: "homebrew-{{ .ProjectName }}"
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"

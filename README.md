@@ -19,6 +19,8 @@ curl -sL "$(curl -s https://api.github.com/repos/s0up4200/go-bdinfo/releases/lat
 bdinfo --main -p /path/to/bluray
 bdinfo --forumsonly --main -p /path/to/bluray
 bdinfo --summaryonly -p /path/to/bluray
+bdinfo update
+bdinfo version
 ```
 
 Report default: `BDInfo_{0}.bdinfo` (disc label substituted).
@@ -41,3 +43,8 @@ Report default: `BDInfo_{0}.bdinfo` (disc label substituted).
 - `-g, --generatestreamdiagnostics`
 - `-e, --extendedstreamdiagnostics`
 - `--self-update` (update to latest release)
+
+## Commands
+
+- `update` (same as `--self-update`)
+- `version`

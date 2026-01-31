@@ -538,7 +538,7 @@ func parseHEVCSEI(data []byte, primaries *string, luminance *string, maxCLL *uin
 	for br.Position() < br.Length()-2 {
 		payloadType := uint32(0)
 		for {
-			b, ok := br.ReadByte()
+			b, ok := br.ReadByteValue()
 			if !ok {
 				return
 			}
@@ -550,7 +550,7 @@ func parseHEVCSEI(data []byte, primaries *string, luminance *string, maxCLL *uin
 
 		payloadSize := uint32(0)
 		for {
-			b, ok := br.ReadByte()
+			b, ok := br.ReadByteValue()
 			if !ok {
 				return
 			}

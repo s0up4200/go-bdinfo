@@ -151,7 +151,7 @@ func TestBitReader_Skip(t *testing.T) {
 	}
 
 	// Read next byte
-	got, ok := br.ReadByte()
+	got, ok := br.ReadByteValue()
 	if !ok {
 		t.Fatalf("ReadByte() failed")
 	}
@@ -175,7 +175,7 @@ func TestBitReader_MixedBitByteReading(t *testing.T) {
 	}
 
 	// Read a byte (should get 0xF0 from remaining 4 bits of first byte + 4 bits of second byte)
-	b, ok := br.ReadByte()
+	b, ok := br.ReadByteValue()
 	if !ok {
 		t.Fatalf("ReadByte() failed")
 	}
@@ -187,7 +187,7 @@ func TestBitReader_MixedBitByteReading(t *testing.T) {
 	br.AlignByte()
 
 	// Read next byte (should get 0xAA)
-	b, ok = br.ReadByte()
+	b, ok = br.ReadByteValue()
 	if !ok {
 		t.Fatalf("ReadByte() after AlignByte() failed")
 	}

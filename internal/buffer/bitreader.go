@@ -81,7 +81,7 @@ func (r *BitReader) ReadBits(n int) (uint64, bool) {
 	return v, true
 }
 
-func (r *BitReader) ReadByte() (byte, bool) {
+func (r *BitReader) ReadByteValue() (byte, bool) {
 	if r.bitPos == 0 {
 		if r.bytePos >= len(r.data) {
 			return 0, false
@@ -104,7 +104,7 @@ func (r *BitReader) ReadBytes(n int) ([]byte, bool) {
 	}
 	out := make([]byte, n)
 	for i := 0; i < n; i++ {
-		b, ok := r.ReadByte()
+		b, ok := r.ReadByteValue()
 		if !ok {
 			return nil, false
 		}
@@ -115,11 +115,11 @@ func (r *BitReader) ReadBytes(n int) ([]byte, bool) {
 
 // ReadUInt16 reads a big-endian uint16.
 func (r *BitReader) ReadUInt16() (uint16, bool) {
-	b1, ok := r.ReadByte()
+	b1, ok := r.ReadByteValue()
 	if !ok {
 		return 0, false
 	}
-	b2, ok := r.ReadByte()
+	b2, ok := r.ReadByteValue()
 	if !ok {
 		return 0, false
 	}
@@ -128,19 +128,19 @@ func (r *BitReader) ReadUInt16() (uint16, bool) {
 
 // ReadUInt32 reads a big-endian uint32.
 func (r *BitReader) ReadUInt32() (uint32, bool) {
-	b1, ok := r.ReadByte()
+	b1, ok := r.ReadByteValue()
 	if !ok {
 		return 0, false
 	}
-	b2, ok := r.ReadByte()
+	b2, ok := r.ReadByteValue()
 	if !ok {
 		return 0, false
 	}
-	b3, ok := r.ReadByte()
+	b3, ok := r.ReadByteValue()
 	if !ok {
 		return 0, false
 	}
-	b4, ok := r.ReadByte()
+	b4, ok := r.ReadByteValue()
 	if !ok {
 		return 0, false
 	}
@@ -167,7 +167,7 @@ func (r *BitReader) Skip(n int) bool {
 		return true
 	}
 	for i := 0; i < n; i++ {
-		if _, ok := r.ReadByte(); !ok {
+		if _, ok := r.ReadByteValue(); !ok {
 			return false
 		}
 	}

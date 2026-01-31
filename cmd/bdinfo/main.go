@@ -105,9 +105,9 @@ func run(args []string) error {
 	fs.Var(&groupByTime, "j", "Group by time")
 	fs.Var(&forumsOnly, "forumsonly", "Output only the forums paste block")
 	fs.Var(&forumsOnly, "f", "Output only the forums paste block")
-	fs.Var(&mainOnly, "main", "Output only the main playlist")
-	fs.Var(&summaryOnly, "summaryonly", "Output only the quick summary block")
-	fs.Var(&summaryOnly, "s", "Output only the quick summary block")
+	fs.Var(&mainOnly, "main", "Output only the main playlist (likely what you want)")
+	fs.Var(&summaryOnly, "summaryonly", "Output only the quick summary block (likely what you want)")
+	fs.Var(&summaryOnly, "s", "Output only the quick summary block (likely what you want)")
 
 	if err := fs.Parse(args); err != nil {
 		return err

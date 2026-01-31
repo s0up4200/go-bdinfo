@@ -1,6 +1,7 @@
 package bdrom
 
 import (
+	"bytes"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -468,20 +469,52 @@ func readDiscTitleFS(metaDir fs.DirectoryInfo) string {
 	if err != nil {
 		return ""
 	}
-	var doc struct {
-		XMLName xml.Name `xml:"discinfo"`
-		Title   struct {
-			Name string `xml:"name"`
-		} `xml:"title"`
+	decoder := xml.NewDecoder(bytes.NewReader(data))
+	inTitle := false
+	inName := false
+	var nameBuilder strings.Builder
+	for {
+		tok, err := decoder.Token()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return ""
+		}
+		switch t := tok.(type) {
+		case xml.StartElement:
+			switch t.Name.Local {
+			case "title":
+				inTitle = true
+			case "name":
+				if inTitle {
+					inName = true
+					nameBuilder.Reset()
+				}
+			}
+		case xml.EndElement:
+			switch t.Name.Local {
+			case "name":
+				if inTitle && inName {
+					name := strings.TrimSpace(nameBuilder.String())
+					if strings.EqualFold(name, "blu-ray") {
+						return ""
+					}
+					if name != "" {
+						return name
+					}
+				}
+				inName = false
+			case "title":
+				inTitle = false
+			}
+		case xml.CharData:
+			if inTitle && inName {
+				nameBuilder.Write(t)
+			}
+		}
 	}
-	if err := xml.Unmarshal(data, &doc); err != nil {
-		return ""
-	}
-	name := strings.TrimSpace(doc.Title.Name)
-	if strings.EqualFold(name, "blu-ray") {
-		return ""
-	}
-	return name
+	return ""
 }
 
 func findFileCaseInsensitive(root fs.DirectoryInfo, target string) (fs.FileInfo, bool) {

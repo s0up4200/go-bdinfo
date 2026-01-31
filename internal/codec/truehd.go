@@ -19,12 +19,7 @@ func ScanTrueHD(a *stream.AudioStream, data []byte) {
 		}
 	}
 	if syncOffset == -1 {
-		if a.CoreStream == nil {
-			a.CoreStream = &stream.AudioStream{Stream: stream.Stream{StreamType: stream.StreamTypeAC3Audio}}
-		}
-		if !a.CoreStream.IsInitialized {
-			ScanAC3(a.CoreStream, data)
-		}
+		scanTrueHDCore(a, data)
 		return
 	}
 
@@ -84,7 +79,33 @@ func ScanTrueHD(a *stream.AudioStream, data []byte) {
 	}
 
 	a.IsVBR = true
-	if a.CoreStream == nil || a.CoreStream.IsInitialized {
+	scanTrueHDCore(a, data)
+	if a.CoreStream != nil && a.CoreStream.IsInitialized {
 		a.IsInitialized = true
 	}
+}
+
+func scanTrueHDCore(a *stream.AudioStream, data []byte) {
+	if a == nil || len(data) < 2 {
+		return
+	}
+	offset := findAC3Sync(data)
+	if offset < 0 {
+		return
+	}
+	if a.CoreStream == nil {
+		a.CoreStream = &stream.AudioStream{Stream: stream.Stream{StreamType: stream.StreamTypeAC3Audio}}
+	}
+	if !a.CoreStream.IsInitialized {
+		ScanAC3(a.CoreStream, data[offset:])
+	}
+}
+
+func findAC3Sync(data []byte) int {
+	for i := 0; i+1 < len(data); i++ {
+		if data[i] == 0x0b && data[i+1] == 0x77 {
+			return i
+		}
+	}
+	return -1
 }

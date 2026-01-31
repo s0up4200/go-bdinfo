@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math"
 	"strconv"
-	"time"
 )
 
 func FormatFileSize(size float64, human bool) string {
@@ -69,11 +68,17 @@ func ReadByte(data []byte, pos *int) byte {
 }
 
 func FormatTime(seconds float64, withMillis bool) string {
-	d := time.Duration(seconds * float64(time.Second))
-	h := int(d.Hours())
-	m := int(d.Minutes()) % 60
-	s := int(d.Seconds()) % 60
-	ms := int(d.Milliseconds()) % 1000
+	ticks := int64(seconds * 10000000.0)
+	if ticks < 0 {
+		ticks = 0
+	}
+	totalMillis := ticks / 10000
+	ms := int(totalMillis % 1000)
+	totalSeconds := ticks / 10000000
+	s := int(totalSeconds % 60)
+	totalMinutes := totalSeconds / 60
+	m := int(totalMinutes % 60)
+	h := int(totalMinutes / 60)
 	if withMillis {
 		return fmt.Sprintf("%d:%02d:%02d.%03d", h, m, s, ms)
 	}

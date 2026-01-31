@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -70,23 +71,65 @@ type ScanResult struct {
 
 const maxScanWorkers = 8
 
-func scanWorkerLimit(total int) int {
-	limit := 2
+func scanWorkerLimit(total int, totalBytes uint64) int {
+	if override := os.Getenv("BDINFO_WORKERS"); override != "" {
+		if parsed, err := strconv.Atoi(override); err == nil && parsed > 0 {
+			return clampWorkers(parsed, total)
+		}
+	}
+	limit := tunedWorkerLimit(total, totalBytes)
+	return clampWorkers(limit, total)
+}
+
+func clampWorkers(limit int, total int) int {
 	if limit < 1 {
 		limit = 1
 	}
-	if override := os.Getenv("BDINFO_WORKERS"); override != "" {
-		if parsed, err := strconv.Atoi(override); err == nil && parsed > 0 {
-			limit = parsed
-		}
+	cpu := runtime.NumCPU()
+	if cpu < 1 {
+		cpu = 1
 	}
-	if limit > maxScanWorkers {
-		limit = maxScanWorkers
+	maxWorkers := cpu - 1
+	if maxWorkers < 1 {
+		maxWorkers = 1
+	}
+	if maxWorkers > maxScanWorkers {
+		maxWorkers = maxScanWorkers
+	}
+	if limit > maxWorkers {
+		limit = maxWorkers
 	}
 	if total > 0 && limit > total {
 		limit = total
 	}
 	return limit
+}
+
+func tunedWorkerLimit(total int, totalBytes uint64) int {
+	if total <= 1 {
+		return 1
+	}
+	if totalBytes == 0 {
+		switch {
+		case total <= 4:
+			return 2
+		case total <= 8:
+			return 3
+		default:
+			return 4
+		}
+	}
+	sizeGiB := totalBytes / (1 << 30)
+	switch {
+	case sizeGiB >= 80:
+		return 4
+	case sizeGiB >= 50:
+		return 3
+	case sizeGiB >= 20:
+		return 2
+	default:
+		return 1
+	}
 }
 
 func runParallel[T any](items []T, limit int, fn func(T) error, onErr func(T, error)) {
@@ -142,6 +185,21 @@ func orderedStreamFiles(files map[string]*StreamFile) []*StreamFile {
 		return out[i].Name < out[j].Name
 	})
 	return out
+}
+
+func streamFilesTotalSize(streamFiles []*StreamFile) uint64 {
+	var total uint64
+	for _, streamFile := range streamFiles {
+		if streamFile == nil {
+			continue
+		}
+		if streamFile.Size > 0 {
+			total += uint64(streamFile.Size)
+		} else if streamFile.FileInfo != nil {
+			total += uint64(streamFile.FileInfo.Length())
+		}
+	}
+	return total
 }
 
 func orderedPlaylists(playlists map[string]*PlaylistFile, order []string) []*PlaylistFile {
@@ -385,7 +443,7 @@ func (b *BDROM) Scan() ScanResult {
 	var errMu sync.Mutex
 
 	clipFiles := orderedStreamClipFiles(b.StreamClipFiles)
-	runParallel(clipFiles, scanWorkerLimit(len(clipFiles)), func(clip *StreamClipFile) error {
+	runParallel(clipFiles, scanWorkerLimit(len(clipFiles), 0), func(clip *StreamClipFile) error {
 		return clip.Scan()
 	}, func(clip *StreamClipFile, err error) {
 		errMu.Lock()
@@ -401,7 +459,7 @@ func (b *BDROM) Scan() ScanResult {
 	}
 
 	playlists := orderedPlaylists(b.PlaylistFiles, b.PlaylistOrder)
-	runParallel(playlists, scanWorkerLimit(len(playlists)), func(playlist *PlaylistFile) error {
+	runParallel(playlists, scanWorkerLimit(len(playlists), 0), func(playlist *PlaylistFile) error {
 		return playlist.Scan(b.StreamFiles, b.StreamClipFiles)
 	}, func(playlist *PlaylistFile, err error) {
 		errMu.Lock()
@@ -420,7 +478,8 @@ func (b *BDROM) Scan() ScanResult {
 		filteredStreamFiles = append(filteredStreamFiles, streamFile)
 	}
 	streamFiles = filteredStreamFiles
-	runParallel(streamFiles, scanWorkerLimit(len(streamFiles)), func(streamFile *StreamFile) error {
+	streamBytes := streamFilesTotalSize(streamFiles)
+	runParallel(streamFiles, scanWorkerLimit(len(streamFiles), streamBytes), func(streamFile *StreamFile) error {
 		return streamFile.Scan(streamPlaylists[streamFile], false)
 	}, func(streamFile *StreamFile, err error) {
 		errMu.Lock()
@@ -428,7 +487,7 @@ func (b *BDROM) Scan() ScanResult {
 		errMu.Unlock()
 	})
 
-	runParallel(playlists, scanWorkerLimit(len(playlists)), func(playlist *PlaylistFile) error {
+	runParallel(playlists, scanWorkerLimit(len(playlists), 0), func(playlist *PlaylistFile) error {
 		playlist.Initialize()
 		return nil
 	}, nil)
@@ -466,7 +525,7 @@ func (b *BDROM) ScanFull() ScanResult {
 	var errMu sync.Mutex
 
 	playlists := orderedPlaylists(b.PlaylistFiles, b.PlaylistOrder)
-	runParallel(playlists, scanWorkerLimit(len(playlists)), func(playlist *PlaylistFile) error {
+	runParallel(playlists, scanWorkerLimit(len(playlists), 0), func(playlist *PlaylistFile) error {
 		playlist.ClearBitrates()
 		return nil
 	}, nil)
@@ -481,7 +540,8 @@ func (b *BDROM) ScanFull() ScanResult {
 		filteredStreamFiles = append(filteredStreamFiles, streamFile)
 	}
 	streamFiles = filteredStreamFiles
-	runParallel(streamFiles, scanWorkerLimit(len(streamFiles)), func(streamFile *StreamFile) error {
+	streamBytes := streamFilesTotalSize(streamFiles)
+	runParallel(streamFiles, scanWorkerLimit(len(streamFiles), streamBytes), func(streamFile *StreamFile) error {
 		return streamFile.Scan(streamPlaylists[streamFile], true)
 	}, func(streamFile *StreamFile, err error) {
 		errMu.Lock()

@@ -86,6 +86,10 @@ func WriteReport(path string, bd *bdrom.BDROM, playlists []*bdrom.PlaylistFile, 
 		}
 	}
 
+	if settings.MainPlaylistOnly {
+		playlists = selectMainPlaylist(playlists, settings)
+	}
+
 	sort.SliceStable(playlists, func(i, j int) bool {
 		return playlists[i].FileSize() > playlists[j].FileSize()
 	})
@@ -407,6 +411,56 @@ func WriteReport(path string, bd *bdrom.BDROM, playlists []*bdrom.PlaylistFile, 
 		output = extractForumsBlocks(output)
 	}
 	return reportName, os.WriteFile(reportName, []byte(output), 0o644)
+}
+
+func selectMainPlaylist(playlists []*bdrom.PlaylistFile, settings settings.Settings) []*bdrom.PlaylistFile {
+	if len(playlists) == 0 {
+		return playlists
+	}
+	candidates := playlists
+	if settings.FilterLoopingPlaylists || settings.FilterShortPlaylists {
+		filtered := make([]*bdrom.PlaylistFile, 0, len(playlists))
+		for _, p := range playlists {
+			if p == nil {
+				continue
+			}
+			if !p.IsValid() {
+				continue
+			}
+			filtered = append(filtered, p)
+		}
+		if len(filtered) > 0 {
+			candidates = filtered
+		}
+	}
+	main := candidates[0]
+	for _, p := range candidates[1:] {
+		if p == nil {
+			continue
+		}
+		mainBitrate := main.TotalBitRate()
+		pBitrate := p.TotalBitRate()
+		if pBitrate > mainBitrate {
+			main = p
+			continue
+		}
+		if pBitrate < mainBitrate {
+			continue
+		}
+		mainSize := main.TotalSize()
+		pSize := p.TotalSize()
+		if pSize > mainSize {
+			main = p
+			continue
+		}
+		if pSize < mainSize {
+			continue
+		}
+		if p.Name < main.Name {
+			main = p
+		}
+	}
+	return []*bdrom.PlaylistFile{main}
 }
 
 func extractForumsBlocks(report string) string {

@@ -407,7 +407,9 @@ func WriteReport(path string, bd *bdrom.BDROM, playlists []*bdrom.PlaylistFile, 
 	}
 
 	output := b.String()
-	if settings.ForumsOnly {
+	if settings.SummaryOnly {
+		output = extractQuickSummary(output)
+	} else if settings.ForumsOnly {
 		output = extractForumsBlocks(output)
 	}
 	return reportName, os.WriteFile(reportName, []byte(output), 0o644)
@@ -490,6 +492,19 @@ func extractForumsBlocks(report string) string {
 	}
 	out.WriteString("\n")
 	return out.String()
+}
+
+func extractQuickSummary(report string) string {
+	const marker = "QUICK SUMMARY:"
+	start := strings.Index(report, marker)
+	if start == -1 {
+		return report
+	}
+	out := strings.TrimSpace(report[start:])
+	if out == "" {
+		return report
+	}
+	return out + "\n"
 }
 
 func formatMbps(bitrate uint64) string {

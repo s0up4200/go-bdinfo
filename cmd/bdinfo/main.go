@@ -77,6 +77,7 @@ func run(args []string) error {
 	var groupByTime optBool
 	var forumsOnly optBool
 	var mainOnly optBool
+	var summaryOnly optBool
 
 	fs.StringVar(&pathLong, "path", "", "The path to iso or bluray folder")
 	fs.StringVar(&pathShort, "p", "", "The path to iso or bluray folder")
@@ -105,6 +106,8 @@ func run(args []string) error {
 	fs.Var(&forumsOnly, "forumsonly", "Output only the forums paste block")
 	fs.Var(&forumsOnly, "f", "Output only the forums paste block")
 	fs.Var(&mainOnly, "main", "Output only the main playlist")
+	fs.Var(&summaryOnly, "summaryonly", "Output only the quick summary block")
+	fs.Var(&summaryOnly, "s", "Output only the quick summary block")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -156,6 +159,9 @@ func run(args []string) error {
 	}
 	if mainOnly.set {
 		s.MainPlaylistOnly = mainOnly.value
+	}
+	if summaryOnly.set {
+		s.SummaryOnly = summaryOnly.value
 	}
 
 	return runForPath(path, s)

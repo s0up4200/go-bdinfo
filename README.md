@@ -33,6 +33,7 @@ bdinfo /path/to/bluray --summaryonly --main
 ```
 
 ```sh
+bdinfo /path/to/bluray --summaryonly --main --stdout
 bdinfo /path/to/bluray --forumsonly --main
 bdinfo /path/to/bluray --main
 bdinfo /path/to/bluray --summaryonly
@@ -47,6 +48,7 @@ Report default: `BDInfo_{0}.bdinfo` (disc label substituted).
 ## Options
 
 - `-o, --reportfilename`
+- `--stdout` (write report to stdout)
 - `--main` (only main playlist; likely what you want)
 - `-f, --forumsonly` (only forums paste block)
 - `-s, --summaryonly` (only quick summary block; likely what you want)

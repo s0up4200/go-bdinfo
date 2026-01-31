@@ -35,6 +35,7 @@ type rootOptions struct {
 	forumsOnly       bool
 	mainOnly         bool
 	summaryOnly      bool
+	stdout           bool
 	selfUpdate       bool
 }
 
@@ -74,6 +75,7 @@ func init() {
 	rootCmd.SetErr(os.Stderr)
 
 	rootCmd.Flags().StringVarP(&opts.reportFile, "reportfilename", "o", "", "The report filename with extension")
+	rootCmd.Flags().BoolVar(&opts.stdout, "stdout", false, "Write report to stdout")
 	rootCmd.Flags().BoolVarP(&opts.genDiag, "generatestreamdiagnostics", "g", false, "Generate the stream diagnostics section")
 	rootCmd.Flags().BoolVarP(&opts.extDiag, "extendedstreamdiagnostics", "e", false, "Enable extended video diagnostics (HEVC metadata)")
 	rootCmd.Flags().BoolVarP(&opts.enableSSIF, "enablessif", "b", false, "Enable SSIF support (default on; use --enablessif=false to disable)")
@@ -136,6 +138,9 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	}
 	if opts.reportFile != "" {
 		s.ReportFileName = opts.reportFile
+	}
+	if opts.stdout {
+		s.ReportFileName = "-"
 	}
 	if flags.Changed("includeversionandnotes") {
 		s.IncludeVersionAndNotes = opts.includeNotes
@@ -205,7 +210,9 @@ func runForPath(path string, settings settings.Settings) error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("Report written: %s\n", reportPath)
+		if reportPath != "-" {
+			fmt.Printf("Report written: %s\n", reportPath)
+		}
 		return nil
 	}
 
@@ -259,7 +266,7 @@ func runForPath(path string, settings settings.Settings) error {
 			if err != nil {
 				return err
 			}
-			if oldReport == "" {
+			if oldReport == "" && reportPath != "-" {
 				fmt.Printf("Report written: %s\n", reportPath)
 			}
 		}
@@ -293,7 +300,9 @@ func runForPath(path string, settings settings.Settings) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Report written: %s\n", reportPath)
+	if reportPath != "-" {
+		fmt.Printf("Report written: %s\n", reportPath)
+	}
 	return nil
 }
 

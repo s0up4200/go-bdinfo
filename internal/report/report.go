@@ -25,11 +25,15 @@ func WriteReport(path string, bd *bdrom.BDROM, playlists []*bdrom.PlaylistFile, 
 	} else if regexp.MustCompile(`\{\d+\}`).MatchString(reportName) {
 		reportName = fmt.Sprintf(reportName, bd.VolumeLabel)
 	}
-	if filepath.Ext(reportName) == "" {
+	if reportName != "-" && filepath.Ext(reportName) == "" {
 		reportName = reportName + ".bdinfo"
 	}
 	if path != "" {
 		reportName = path
+	}
+
+	if reportName == "-" {
+		return reportName, nil
 	}
 
 	if _, err := os.Stat(reportName); err == nil {
@@ -417,6 +421,10 @@ func WriteReport(path string, bd *bdrom.BDROM, playlists []*bdrom.PlaylistFile, 
 		output = extractQuickSummary(output)
 	} else if settings.ForumsOnly {
 		output = extractForumsBlocks(output)
+	}
+	if reportName == "-" {
+		_, err := os.Stdout.WriteString(output)
+		return reportName, err
 	}
 	return reportName, os.WriteFile(reportName, []byte(output), 0o644)
 }

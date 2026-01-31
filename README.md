@@ -29,10 +29,11 @@ curl -sL "$(curl -s https://api.github.com/repos/s0up4200/go-bdinfo/releases/lat
 Recommended (likely what you want):
 
 ```sh
-bdinfo /path/to/bluray --main --forumsonly
+bdinfo /path/to/bluray --summaryonly --main
 ```
 
 ```sh
+bdinfo /path/to/bluray --main --forumsonly
 bdinfo /path/to/bluray --main
 bdinfo /path/to/bluray --forumsonly --main
 bdinfo /path/to/bluray --summaryonly

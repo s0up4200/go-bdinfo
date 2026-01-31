@@ -2,10 +2,20 @@
 
 Go rewrite of BDInfo.
 
+## Install
+
+- Homebrew (macOS): `brew tap s0up4200/go-bdinfo` then `brew install --cask bdinfo`.
+- Go install: `go install github.com/s0up4200/go-bdinfo/cmd/bdinfo@latest`
+- Latest release (one-liner, Linux x86_64):
+  - `curl -sL "$(curl -s https://api.github.com/repos/s0up4200/go-bdinfo/releases/latest | grep browser_download_url | grep linux_amd64 | cut -d\" -f4)" | tar -xz -C /usr/local/bin`
+  - Replace `linux_amd64` with `linux_arm64`, `darwin_amd64`, or `darwin_arm64` as needed.
+
 ## Usage
 
 ```sh
-go run ./cmd/bdinfo -p /path/to/bluray
+bdinfo --main -p /path/to/bluray
+bdinfo --forumsonly --main -p /path/to/bluray
+bdinfo --summaryonly -p /path/to/bluray
 ```
 
 Report default: `BDInfo_{0}.bdinfo` (disc label substituted).
@@ -28,11 +38,3 @@ Report default: `BDInfo_{0}.bdinfo` (disc label substituted).
 - `-g, --generatestreamdiagnostics`
 - `-e, --extendedstreamdiagnostics`
 - `--self-update` (update to latest release)
-
-## Install
-
-- Homebrew (macOS): `brew tap s0up4200/go-bdinfo` then `brew install --cask bdinfo`.
-- Binaries: download the latest release from GitHub Releases.
-- Build from source:
-  - `go install github.com/s0up4200/go-bdinfo/cmd/bdinfo@latest`
-  - or `git clone https://github.com/s0up4200/go-bdinfo.git` then `go build ./cmd/bdinfo`

@@ -33,9 +33,8 @@ bdinfo /path/to/bluray --summaryonly --main
 ```
 
 ```sh
-bdinfo /path/to/bluray --main --forumsonly
-bdinfo /path/to/bluray --main
 bdinfo /path/to/bluray --forumsonly --main
+bdinfo /path/to/bluray --main
 bdinfo /path/to/bluray --summaryonly
 bdinfo update
 bdinfo version

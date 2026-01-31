@@ -50,17 +50,17 @@ Report default: `BDInfo_{0}.bdinfo` (disc label substituted).
 - `--main` (only main playlist; likely what you want)
 - `-f, --forumsonly` (only forums paste block)
 - `-s, --summaryonly` (only quick summary block; likely what you want)
-- `-b, --enablessif`
+- `-b, --enablessif` (default on; use `--enablessif=false` to disable)
 - `-l, --filterloopingplaylists`
-- `-y, --filtershortplaylist`
-- `-v, --filtershortplaylistvalue`
+- `-y, --filtershortplaylist` (default on; use `--filtershortplaylist=false` to disable)
+- `-v, --filtershortplaylistvalue` (seconds)
 - `-k, --keepstreamorder`
-- `-m, --generatetextsummary`
-- `-q, --includeversionandnotes`
+- `-m, --generatetextsummary` (default on; use `--generatetextsummary=false` to disable)
+- `-q, --includeversionandnotes` (default on; use `--includeversionandnotes=false` to disable)
 - `-j, --groupbytime`
 - `-g, --generatestreamdiagnostics`
-- `-e, --extendedstreamdiagnostics`
-- `--self-update` (update to latest release)
+- `-e, --extendedstreamdiagnostics` (extended HEVC video diagnostics)
+- `--self-update` (update to latest release; release builds only)
 
 ## Commands
 

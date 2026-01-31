@@ -52,7 +52,7 @@ var rootCmd = &cobra.Command{
 var updateCmd = &cobra.Command{
 	Use:   "update",
 	Short: "Update bdinfo",
-	Long:  "Update bdinfo to latest version.",
+	Long:  "Update bdinfo to latest version (release builds only).",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runSelfUpdate(cmd.Context())
 	},
@@ -74,21 +74,21 @@ func init() {
 	rootCmd.SetErr(os.Stderr)
 
 	rootCmd.Flags().StringVarP(&opts.reportFile, "reportfilename", "o", "", "The report filename with extension")
-	rootCmd.Flags().BoolVarP(&opts.genDiag, "generatestreamdiagnostics", "g", false, "Generate the stream diagnostics")
-	rootCmd.Flags().BoolVarP(&opts.extDiag, "extendedstreamdiagnostics", "e", false, "Generate the extended stream diagnostics")
-	rootCmd.Flags().BoolVarP(&opts.enableSSIF, "enablessif", "b", false, "Enable SSIF support")
-	rootCmd.Flags().BoolVarP(&opts.filterLooping, "filterloopingplaylists", "l", false, "Filter looping playlist")
-	rootCmd.Flags().BoolVarP(&opts.filterShort, "filtershortplaylist", "y", false, "Filter short playlist")
-	rootCmd.Flags().IntVarP(&opts.filterShortValue, "filtershortplaylistvalue", "v", 20, "Filter number of short playlist")
+	rootCmd.Flags().BoolVarP(&opts.genDiag, "generatestreamdiagnostics", "g", false, "Generate the stream diagnostics section")
+	rootCmd.Flags().BoolVarP(&opts.extDiag, "extendedstreamdiagnostics", "e", false, "Enable extended video diagnostics (HEVC metadata)")
+	rootCmd.Flags().BoolVarP(&opts.enableSSIF, "enablessif", "b", false, "Enable SSIF support (default on; use --enablessif=false to disable)")
+	rootCmd.Flags().BoolVarP(&opts.filterLooping, "filterloopingplaylists", "l", false, "Filter looping playlists")
+	rootCmd.Flags().BoolVarP(&opts.filterShort, "filtershortplaylist", "y", false, "Filter short playlists (default on; use --filtershortplaylist=false to disable)")
+	rootCmd.Flags().IntVarP(&opts.filterShortValue, "filtershortplaylistvalue", "v", 20, "Short playlist length threshold in seconds")
 	rootCmd.Flags().BoolVarP(&opts.keepOrder, "keepstreamorder", "k", false, "Keep stream order")
-	rootCmd.Flags().BoolVarP(&opts.genSummary, "generatetextsummary", "m", false, "Generate summary")
-	rootCmd.Flags().BoolVarP(&opts.includeNotes, "includeversionandnotes", "q", false, "Include version and notes inside report")
+	rootCmd.Flags().BoolVarP(&opts.genSummary, "generatetextsummary", "m", false, "Generate quick summary block (default on; use --generatetextsummary=false to disable)")
+	rootCmd.Flags().BoolVarP(&opts.includeNotes, "includeversionandnotes", "q", false, "Include version and scan notes (default on; use --includeversionandnotes=false to disable)")
 	rootCmd.Flags().BoolVarP(&opts.groupByTime, "groupbytime", "j", false, "Group by time")
 	rootCmd.Flags().BoolVarP(&opts.forumsOnly, "forumsonly", "f", false, "Output only the forums paste block")
 	rootCmd.Flags().BoolVar(&opts.mainOnly, "main", false, "Output only the main playlist (likely what you want)")
 	rootCmd.Flags().BoolVarP(&opts.summaryOnly, "summaryonly", "s", false, "Output only the quick summary block (likely what you want)")
-	rootCmd.Flags().BoolVar(&opts.selfUpdate, "self-update", false, "Update bdinfo to latest version")
-	rootCmd.Flags().BoolVar(&opts.selfUpdate, "update", false, "Update bdinfo to latest version")
+	rootCmd.Flags().BoolVar(&opts.selfUpdate, "self-update", false, "Update bdinfo to latest version (release builds only)")
+	rootCmd.Flags().BoolVar(&opts.selfUpdate, "update", false, "Update bdinfo to latest version (release builds only)")
 
 	rootCmd.AddCommand(updateCmd)
 	rootCmd.AddCommand(versionCmd)
@@ -151,6 +151,9 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	}
 	if flags.Changed("summaryonly") {
 		s.SummaryOnly = opts.summaryOnly
+		if s.SummaryOnly {
+			s.GenerateTextSummary = true
+		}
 	}
 
 	if err := runForPath(opts.path, s); err != nil {

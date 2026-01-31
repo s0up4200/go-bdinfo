@@ -76,13 +76,15 @@ func WriteReport(path string, bd *bdrom.BDROM, playlists []*bdrom.PlaylistFile, 
 	}
 	fmt.Fprintf(&b, "%-16s%s\n\n\n", "BDInfo:", productVersion)
 
-	if scan.ScanError != nil {
-		fmt.Fprintf(&b, "WARNING: Report is incomplete because: %s\n", scan.ScanError.Error())
-	}
-	if len(scan.FileErrors) > 0 {
-		b.WriteString("WARNING: File errors were encountered during scan:\n")
-		for name, err := range scan.FileErrors {
-			fmt.Fprintf(&b, "\n%s\t%s\n", name, err.Error())
+	if settings.IncludeVersionAndNotes {
+		if scan.ScanError != nil {
+			fmt.Fprintf(&b, "WARNING: Report is incomplete because: %s\n", scan.ScanError.Error())
+		}
+		if len(scan.FileErrors) > 0 {
+			b.WriteString("WARNING: File errors were encountered during scan:\n")
+			for name, err := range scan.FileErrors {
+				fmt.Fprintf(&b, "\n%s\t%s\n", name, err.Error())
+			}
 		}
 	}
 
@@ -180,7 +182,11 @@ func WriteReport(path string, bd *bdrom.BDROM, playlists []*bdrom.PlaylistFile, 
 		if len(extra) > 0 {
 			fmt.Fprintf(&b, "%-16s%s\n", "Extras:", strings.Join(extra, ", "))
 		}
-		fmt.Fprintf(&b, "%-16s%s\n\n\n", "BDInfo:", productVersion)
+		if settings.IncludeVersionAndNotes {
+			fmt.Fprintf(&b, "%-16s%s\n\n\n", "BDInfo:", productVersion)
+		} else {
+			b.WriteString("\n\n\n")
+		}
 
 		b.WriteString("PLAYLIST REPORT:\n\n\n")
 		fmt.Fprintf(&b, "%-24s%s\n", "Name:", playlist.Name)

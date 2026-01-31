@@ -13,7 +13,11 @@ import (
 	"github.com/s0up4200/go-bdinfo/internal/stream"
 )
 
-const maxStreamData = 5 * 1024 * 1024
+const (
+	maxStreamDataVideo = 5 * 1024 * 1024
+	maxStreamDataAudio = 256 * 1024
+	maxStreamDataOther = 128 * 1024
+)
 
 type InterleavedFile struct {
 	FileInfo fs.FileInfo
@@ -153,9 +157,18 @@ func (s *StreamFile) Scan(playlists []*PlaylistFile, full bool) error {
 	}
 
 	states := make(map[uint16]*streamState)
-	for pid := range s.Streams {
+	for pid, st := range s.Streams {
+		dataCap := maxStreamDataOther
+		if st != nil {
+			switch {
+			case st.Base().IsVideoStream():
+				dataCap = maxStreamDataVideo
+			case st.Base().IsAudioStream():
+				dataCap = maxStreamDataAudio
+			}
+		}
 		states[pid] = &streamState{
-			codecData:          make([]byte, 0, maxStreamData),
+			codecData:          make([]byte, 0, dataCap),
 			pesPacketRemaining: -2,
 			collectDiagnostics: collectDiagnostics,
 		}
@@ -339,12 +352,15 @@ func (s *StreamFile) Scan(playlists []*PlaylistFile, full bool) error {
 		if state.pesPacketRemaining > 0 {
 			state.pesPacketRemaining -= len(payload)
 		}
-		if state.codecData != nil && len(state.codecData) < maxStreamData && len(payload) > 0 {
-			need := maxStreamData - len(state.codecData)
-			if len(payload) > need {
-				payload = payload[:need]
+		if state.codecData != nil && len(payload) > 0 {
+			dataCap := cap(state.codecData)
+			if len(state.codecData) < dataCap {
+				need := dataCap - len(state.codecData)
+				if len(payload) > need {
+					payload = payload[:need]
+				}
+				state.codecData = append(state.codecData, payload...)
 			}
-			state.codecData = append(state.codecData, payload...)
 		}
 	}
 

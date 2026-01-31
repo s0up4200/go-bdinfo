@@ -59,4 +59,4 @@ homebrew_casks:
     description: "Go rewrite of BDInfo."
     repository:
       owner: s0up4200
-      name: "{{ .ProjectName }}"
+      name: "go-bdinfo"

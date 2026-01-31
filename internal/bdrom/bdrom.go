@@ -8,7 +8,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -413,6 +412,14 @@ func (b *BDROM) Scan() ScanResult {
 	// scan stream files
 	streamFiles := orderedStreamFiles(b.StreamFiles)
 	streamPlaylists := buildStreamPlaylistIndex(playlists)
+	filteredStreamFiles := streamFiles[:0]
+	for _, streamFile := range streamFiles {
+		if len(streamPlaylists[streamFile]) == 0 {
+			continue
+		}
+		filteredStreamFiles = append(filteredStreamFiles, streamFile)
+	}
+	streamFiles = filteredStreamFiles
 	runParallel(streamFiles, scanWorkerLimit(len(streamFiles)), func(streamFile *StreamFile) error {
 		return streamFile.Scan(streamPlaylists[streamFile], false)
 	}, func(streamFile *StreamFile, err error) {
@@ -466,6 +473,14 @@ func (b *BDROM) ScanFull() ScanResult {
 
 	streamFiles := orderedStreamFiles(b.StreamFiles)
 	streamPlaylists := buildStreamPlaylistIndex(playlists)
+	filteredStreamFiles := streamFiles[:0]
+	for _, streamFile := range streamFiles {
+		if len(streamPlaylists[streamFile]) == 0 {
+			continue
+		}
+		filteredStreamFiles = append(filteredStreamFiles, streamFile)
+	}
+	streamFiles = filteredStreamFiles
 	runParallel(streamFiles, scanWorkerLimit(len(streamFiles)), func(streamFile *StreamFile) error {
 		return streamFile.Scan(streamPlaylists[streamFile], true)
 	}, func(streamFile *StreamFile, err error) {

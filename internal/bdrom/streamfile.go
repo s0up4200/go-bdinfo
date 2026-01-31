@@ -56,6 +56,7 @@ type streamState struct {
 	pesHeaderParsed     bool
 	pesPtsDtsFlags      byte
 	pesStarted          bool
+	collectDiagnostics  bool
 }
 
 func NewStreamFile(fileInfo fs.FileInfo) *StreamFile {
@@ -115,6 +116,7 @@ func (s *StreamFile) Scan(playlists []*PlaylistFile, full bool) error {
 	if len(playlists) > 0 {
 		scanSettings = playlists[0].Settings
 	}
+	collectDiagnostics := scanSettings.GenerateStreamDiagnostics
 
 	fileInfo := s.FileInfo
 	if scanSettings.EnableSSIF && s.InterleavedFile != nil && s.InterleavedFile.FileInfo != nil {
@@ -152,9 +154,15 @@ func (s *StreamFile) Scan(playlists []*PlaylistFile, full bool) error {
 
 	states := make(map[uint16]*streamState)
 	for pid := range s.Streams {
-		states[pid] = &streamState{codecData: make([]byte, 0, maxStreamData), pesPacketRemaining: -2}
-		if _, ok := s.StreamDiagnostics[pid]; !ok {
-			s.StreamDiagnostics[pid] = nil
+		states[pid] = &streamState{
+			codecData:          make([]byte, 0, maxStreamData),
+			pesPacketRemaining: -2,
+			collectDiagnostics: collectDiagnostics,
+		}
+		if collectDiagnostics {
+			if _, ok := s.StreamDiagnostics[pid]; !ok {
+				s.StreamDiagnostics[pid] = nil
+			}
 		}
 	}
 
@@ -168,7 +176,7 @@ func (s *StreamFile) Scan(playlists []*PlaylistFile, full bool) error {
 		pid := (uint16(pkt[syncOffset+1]&0x1f) << 8) | uint16(pkt[syncOffset+2])
 		state, ok := states[pid]
 		if !ok {
-			state = &streamState{pesPacketRemaining: -2}
+			state = &streamState{pesPacketRemaining: -2, collectDiagnostics: collectDiagnostics}
 			states[pid] = state
 		}
 		st, known := s.Streams[pid]
@@ -374,12 +382,20 @@ func (s *StreamFile) Scan(playlists []*PlaylistFile, full bool) error {
 	}
 
 	for pid, st := range s.Streams {
-		data := states[pid].codecData
+		state := states[pid]
+		if state == nil {
+			continue
+		}
+		data := state.codecData
 		switch concrete := st.(type) {
 		case *stream.VideoStream:
 			switch concrete.StreamType {
 			case stream.StreamTypeAVCVideo:
-				codec.ScanAVC(concrete, data, &states[pid].streamTag)
+				var tag *string
+				if state.collectDiagnostics {
+					tag = &state.streamTag
+				}
+				codec.ScanAVC(concrete, data, tag)
 			case stream.StreamTypeHEVCVideo:
 				codec.ScanHEVC(concrete, data, scanSettings)
 			case stream.StreamTypeMPEG2Video:
@@ -497,17 +513,21 @@ func (s *StreamFile) updateStreamBitrate(playlists []*PlaylistFile, pid uint16, 
 		streamInfo.Base().PayloadBytes += state.windowBytes
 		streamInfo.Base().PacketCount += state.windowPackets
 		if streamInfo.Base().IsVideoStream() {
-			if state.streamTag == "" {
-				state.streamTag = "I"
+			if state.collectDiagnostics {
+				if state.streamTag == "" {
+					state.streamTag = "I"
+				}
+				streamInfo.Base().PacketSeconds += streamInterval
+				s.StreamDiagnostics[pid] = append(s.StreamDiagnostics[pid], StreamDiagnostics{
+					Marker:   streamTime,
+					Interval: streamInterval,
+					Bytes:    state.windowBytes,
+					Packets:  state.windowPackets,
+					Tag:      state.streamTag,
+				})
+			} else {
+				streamInfo.Base().PacketSeconds += streamInterval
 			}
-			streamInfo.Base().PacketSeconds += streamInterval
-			s.StreamDiagnostics[pid] = append(s.StreamDiagnostics[pid], StreamDiagnostics{
-				Marker:   streamTime,
-				Interval: streamInterval,
-				Bytes:    state.windowBytes,
-				Packets:  state.windowPackets,
-				Tag:      state.streamTag,
-			})
 		}
 	}
 

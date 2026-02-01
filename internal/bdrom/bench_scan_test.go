@@ -13,7 +13,7 @@ func BenchmarkScan(b *testing.B) {
 		b.Skip("BDINFO_BENCH_PATH not set")
 	}
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		rom, err := New(path, settings.Default("."))
 		if err != nil {
 			b.Fatal(err)

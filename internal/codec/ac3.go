@@ -10,7 +10,7 @@ var ac3Channels = []int{2, 1, 2, 3, 3, 4, 4, 5}
 
 func ac3ChanMap(chanMap uint16) int {
 	channels := 0
-	for i := 0; i < 16; i++ {
+	for i := range 16 {
 		if (chanMap & uint16(1<<uint(15-i))) != 0 {
 			switch i {
 			case 5, 6, 9, 10, 11:
@@ -259,7 +259,7 @@ func findEmdfSync(data []byte, startBit int) (int, bool) {
 	totalBits := len(data) * 8
 	for bitPos := startBit; bitPos+16 <= totalBits; bitPos++ {
 		var val uint16
-		for i := 0; i < 16; i++ {
+		for i := range 16 {
 			bytePos := (bitPos + i) / 8
 			bitOffset := 7 - ((bitPos + i) % 8)
 			if bytePos >= len(data) {

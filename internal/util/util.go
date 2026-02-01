@@ -13,10 +13,7 @@ func FormatFileSize(size float64, human bool) string {
 	units := []string{"B", "KB", "MB", "GB", "TB", "PB", "EB"}
 	group := 0
 	if human {
-		group = int(math.Log10(size) / math.Log10(1024))
-		if group < 0 {
-			group = 0
-		}
+		group = max(int(math.Log10(size)/math.Log10(1024)), 0)
 		if group >= len(units) {
 			group = len(units) - 1
 		}
@@ -26,10 +23,7 @@ func FormatFileSize(size float64, human bool) string {
 
 func ReadString(data []byte, count int, pos *int) string {
 	if *pos+count > len(data) {
-		count = len(data) - *pos
-		if count < 0 {
-			count = 0
-		}
+		count = max(len(data)-*pos, 0)
 	}
 	val := string(data[*pos : *pos+count])
 	*pos += count
@@ -68,10 +62,7 @@ func ReadByte(data []byte, pos *int) byte {
 }
 
 func FormatTime(seconds float64, withMillis bool) string {
-	ticks := int64(seconds * 10000000.0)
-	if ticks < 0 {
-		ticks = 0
-	}
+	ticks := max(int64(seconds*10000000.0), 0)
 	totalMillis := ticks / 10000
 	ms := int(totalMillis % 1000)
 	totalSeconds := ticks / 10000000

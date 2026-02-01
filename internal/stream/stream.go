@@ -492,8 +492,8 @@ func (v *VideoStream) Description() string {
 			}
 		}
 	}
-	if strings.HasSuffix(description, " / ") {
-		description = strings.TrimSuffix(description, " / ")
+	if before, ok := strings.CutSuffix(description, " / "); ok {
+		description = before
 	}
 	return description
 }
@@ -609,8 +609,8 @@ func (a *AudioStream) Description() string {
 			description += " / Joint Stereo"
 		}
 	}
-	if strings.HasSuffix(description, " / ") {
-		description = strings.TrimSuffix(description, " / ")
+	if before, ok := strings.CutSuffix(description, " / "); ok {
+		description = before
 	}
 
 	if a.CoreStream == nil {

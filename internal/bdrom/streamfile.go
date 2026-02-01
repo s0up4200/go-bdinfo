@@ -274,17 +274,11 @@ func (s *StreamFile) Scan(playlists []*PlaylistFile, full bool) error {
 		}
 
 		for state.pesHeaderRemaining > 0 && len(payload) > 0 {
-			headerTake := state.pesHeaderRemaining
-			if headerTake > len(payload) {
-				headerTake = len(payload)
-			}
+			headerTake := min(state.pesHeaderRemaining, len(payload))
 			if headerTake > 0 && state.pesHeaderBuf != nil {
 				need := 19 - len(state.pesHeaderBuf)
 				if need > 0 {
-					take := headerTake
-					if take > need {
-						take = need
-					}
+					take := min(headerTake, need)
 					state.pesHeaderBuf = append(state.pesHeaderBuf, payload[:take]...)
 				}
 			}
@@ -299,10 +293,7 @@ func (s *StreamFile) Scan(playlists []*PlaylistFile, full bool) error {
 				if state.pesPacketRemaining == -2 && len(state.pesHeaderBuf) >= 6 {
 					pesLen := int(state.pesHeaderBuf[4])<<8 | int(state.pesHeaderBuf[5])
 					if pesLen > 0 {
-						remaining := pesLen - (3 + hdrLen)
-						if remaining < 0 {
-							remaining = 0
-						}
+						remaining := max(pesLen-(3+hdrLen), 0)
 						state.pesPacketRemaining = remaining
 					} else {
 						state.pesPacketRemaining = -1

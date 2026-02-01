@@ -64,7 +64,7 @@ func (s *StreamClipFile) Scan() error {
 
 	streamCount := int(clipData[8])
 	offset := 10
-	for i := 0; i < streamCount; i++ {
+	for range streamCount {
 		if offset+4 > len(clipData) {
 			break
 		}

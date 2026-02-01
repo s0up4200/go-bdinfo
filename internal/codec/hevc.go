@@ -214,7 +214,7 @@ func parseHEVCSPSVUI(br *buffer.BitReader, maxSubLayersMinus1 uint64, log2MaxPic
 		return v
 	}
 	skipExpMulti := func(n int) {
-		for i := 0; i < n; i++ {
+		for range n {
 			_ = readUE()
 		}
 	}
@@ -246,7 +246,7 @@ func parseHEVCSPSVUI(br *buffer.BitReader, maxSubLayersMinus1 uint64, log2MaxPic
 	skipHEVCShortTermRefPicSets(br, numShortTermRefPicSets)
 	if readBool() { // long_term_ref_pics_present_flag
 		numLongTermRefPicsSps := readUE()
-		for i := uint64(0); i < numLongTermRefPicsSps; i++ {
+		for range numLongTermRefPicsSps {
 			_ = br.SkipBits(int(log2MaxPicOrderCntLsbMinus4 + 4))
 			_ = br.SkipBits(1)
 		}
@@ -306,7 +306,7 @@ func skipHEVCShortTermRefPicSets(br *buffer.BitReader, numShortTermRefPicSets ui
 	}
 
 	numPics := uint64(0)
-	for stRpsIdx := uint64(0); stRpsIdx < numShortTermRefPicSets; stRpsIdx++ {
+	for stRpsIdx := range numShortTermRefPicSets {
 		interRefPicSetPredictionFlag := false
 		if stRpsIdx > 0 {
 			interRefPicSetPredictionFlag = readBool()
@@ -334,11 +334,11 @@ func skipHEVCShortTermRefPicSets(br *buffer.BitReader, numShortTermRefPicSets ui
 			numNegativePics := readUE()
 			numPositivePics := readUE()
 			numPics = numNegativePics + numPositivePics
-			for i := uint64(0); i < numNegativePics; i++ {
+			for range numNegativePics {
 				_ = readUE()
 				_ = br.SkipBits(1)
 			}
-			for i := uint64(0); i < numPositivePics; i++ {
+			for range numPositivePics {
 				_ = readUE()
 				_ = br.SkipBits(1)
 			}
@@ -356,7 +356,7 @@ func skipHEVCScalingListData(br *buffer.BitReader) {
 		return v
 	}
 
-	for sizeID := 0; sizeID < 4; sizeID++ {
+	for sizeID := range 4 {
 		matrixCount := 6
 		if sizeID == 3 {
 			matrixCount = 2
@@ -365,10 +365,7 @@ func skipHEVCScalingListData(br *buffer.BitReader) {
 			if !readBool() { // scaling_list_pred_mode_flag
 				_ = readUE()
 			} else {
-				coefNum := 1 << (4 + (sizeID << 1))
-				if coefNum > 64 {
-					coefNum = 64
-				}
+				coefNum := min(1<<(4+(sizeID<<1)), 64)
 				if sizeID > 1 {
 					_ = readUE()
 				}
@@ -517,14 +514,14 @@ func parseHEVCProfileTierLevel(br *buffer.BitReader, maxSubLayersMinus1 int) str
 	}
 
 	if maxSubLayersMinus1 > 0 {
-		for i := 0; i < maxSubLayersMinus1; i++ {
+		for range maxSubLayersMinus1 {
 			_, _ = br.ReadBits(1)
 			_, _ = br.ReadBits(1)
 		}
 		if maxSubLayersMinus1 < 8 {
 			_, _ = br.ReadBits(2 * (8 - maxSubLayersMinus1))
 		}
-		for i := 0; i < maxSubLayersMinus1; i++ {
+		for range maxSubLayersMinus1 {
 			_, _ = br.ReadBits(88)
 			_, _ = br.ReadBits(8)
 		}
@@ -582,7 +579,7 @@ func parseHEVCSEI(data []byte, primaries *string, luminance *string, maxCLL *uin
 
 func parseMasteringDisplayColorVolume(br *buffer.BitReader, primaries *string, luminance *string) {
 	vals := make([]uint16, 8)
-	for i := 0; i < 8; i++ {
+	for i := range 8 {
 		v, _ := br.ReadBits(16)
 		vals[i] = uint16(v)
 	}
@@ -632,7 +629,7 @@ func formatMasteringDisplay(primaries []uint16) string {
 	}
 	for _, cs := range common {
 		match := true
-		for i := 0; i < 8; i++ {
+		for i := range 8 {
 			if primaries[i] < cs.vals[i]-25 || primaries[i] > cs.vals[i]+25 {
 				match = false
 				break

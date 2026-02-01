@@ -279,7 +279,7 @@ func (r *Reader) readVolumeDescriptorSequence(extent ExtentAD) error {
 }
 
 // readDescriptor reads a descriptor with its tag
-func (r *Reader) readDescriptor(desc interface{}) error {
+func (r *Reader) readDescriptor(desc any) error {
 	return binary.Read(r.file, binary.LittleEndian, desc)
 }
 

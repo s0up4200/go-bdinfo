@@ -85,14 +85,8 @@ func clampWorkers(limit int, total int) int {
 	if limit < 1 {
 		limit = 1
 	}
-	cpu := runtime.NumCPU()
-	if cpu < 1 {
-		cpu = 1
-	}
-	maxWorkers := cpu - 1
-	if maxWorkers < 1 {
-		maxWorkers = 1
-	}
+	cpu := max(runtime.NumCPU(), 1)
+	maxWorkers := max(cpu-1, 1)
 	if maxWorkers > maxScanWorkers {
 		maxWorkers = maxScanWorkers
 	}
@@ -145,7 +139,6 @@ func runParallel[T any](items []T, limit int, fn func(T) error, onErr func(T, er
 	sem := make(chan struct{}, limit)
 	var wg sync.WaitGroup
 	for _, item := range items {
-		item := item
 		wg.Add(1)
 		sem <- struct{}{}
 		go func() {

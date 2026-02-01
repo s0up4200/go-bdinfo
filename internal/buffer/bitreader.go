@@ -71,7 +71,7 @@ func (r *BitReader) ReadBits(n int) (uint64, bool) {
 		return 0, true
 	}
 	var v uint64
-	for i := 0; i < n; i++ {
+	for range n {
 		bit, ok := r.ReadBit()
 		if !ok {
 			return 0, false
@@ -103,7 +103,7 @@ func (r *BitReader) ReadBytes(n int) ([]byte, bool) {
 		return []byte{}, true
 	}
 	out := make([]byte, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		b, ok := r.ReadByteValue()
 		if !ok {
 			return nil, false
@@ -166,7 +166,7 @@ func (r *BitReader) Skip(n int) bool {
 	if n <= 0 {
 		return true
 	}
-	for i := 0; i < n; i++ {
+	for range n {
 		if _, ok := r.ReadByteValue(); !ok {
 			return false
 		}

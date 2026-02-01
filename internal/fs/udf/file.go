@@ -286,7 +286,7 @@ func (d *Directory) readEntries() error {
 }
 
 // readFileEntry reads a file entry from an ICB
-func (r *Reader) readFileEntry(icb LongAD) (interface{}, error) {
+func (r *Reader) readFileEntry(icb LongAD) (any, error) {
 	location := icb.ExtentLocation.Location
 	if r.partitionStart > 0 {
 		location = r.partitionStart + icb.ExtentLocation.Location
@@ -324,7 +324,7 @@ func (r *Reader) readFileEntry(icb LongAD) (interface{}, error) {
 }
 
 // readAllocationDescriptors extracts allocation descriptors from a file entry
-func (r *Reader) readAllocationDescriptors(entry interface{}) []ShortAD {
+func (r *Reader) readAllocationDescriptors(entry any) []ShortAD {
 	// Simplified - only handles short allocation descriptors
 	// Full implementation would handle all types (short, long, extended)
 
@@ -394,7 +394,7 @@ func (r *Reader) readAllocationDescriptors(entry interface{}) []ShortAD {
 	numDescs := allocDescLength / 8 // Each ShortAD is 8 bytes
 	descs := make([]ShortAD, numDescs)
 
-	for i := uint32(0); i < numDescs; i++ {
+	for i := range numDescs {
 		if err := binary.Read(r.file, binary.LittleEndian, &descs[i]); err != nil {
 			break
 		}

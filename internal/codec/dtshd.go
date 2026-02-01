@@ -93,12 +93,12 @@ func ScanDTSHD(a *stream.AudioStream, data []byte, fallbackBitrate int64) {
 			return
 		}
 		numAssets = numAssetsBits + 1
-		for i := 0; i < numAudioPresent; i++ {
+		for range numAudioPresent {
 			if _, ok := br.ReadBits(int(subStreamIndex) + 1); !ok {
 				return
 			}
 		}
-		for i := 0; i < numAudioPresent; i++ {
+		for range numAudioPresent {
 			for j := 0; j < int(subStreamIndex)+1; j++ {
 				if (j+1)%2 == 1 {
 					if !br.SkipBits(8) {
@@ -125,7 +125,7 @@ func ScanDTSHD(a *stream.AudioStream, data []byte, fallbackBitrate int64) {
 				return
 			}
 			numMixOutConfigs := int(numMixOutConfigsBits) + 1
-			for i := 0; i < numMixOutConfigs; i++ {
+			for range numMixOutConfigs {
 				if _, ok := br.ReadBits(numBits); !ok {
 					return
 				}
@@ -278,7 +278,7 @@ func ScanDTSHD(a *stream.AudioStream, data []byte, fallbackBitrate int64) {
 
 func detectDTSX(data []byte) bool {
 	var temp uint32
-	for i := 0; i < len(data); i++ {
+	for i := range data {
 		temp = (temp << 8) | uint32(data[i])
 		switch temp {
 		case 0x41A29547, // XLL Extended data

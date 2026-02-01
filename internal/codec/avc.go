@@ -9,7 +9,7 @@ func ScanAVC(v *stream.VideoStream, data []byte, tag *string) {
 	profile := ""
 	var constraintSet3 byte
 
-	for i := 0; i < len(data); i++ {
+	for i := range data {
 		parse = (parse << 8) | uint32(data[i])
 		if parse == 0x00000109 {
 			accessUnit = 1

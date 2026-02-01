@@ -658,10 +658,7 @@ func (q *floatQueue) Dequeue() float64 {
 }
 
 func formatTimeHmsms(seconds float64, padHour bool) string {
-	ticks := int64(seconds * 10000000.0)
-	if ticks < 0 {
-		ticks = 0
-	}
+	ticks := max(int64(seconds*10000000.0), 0)
 	totalMillis := ticks / 10000
 	ms := int(totalMillis % 1000)
 	totalSeconds := ticks / 10000000

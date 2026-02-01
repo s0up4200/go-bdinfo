@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"slices"
 	"sort"
 	"strings"
 
@@ -182,7 +183,7 @@ func (p *PlaylistFile) Scan(streamFiles map[string]*StreamFile, clipFiles map[st
 	_ = util.ReadUint16(data, &pos) // subitem count
 
 	chapterClips := []*StreamClip{}
-	for itemIndex := 0; itemIndex < itemCount; itemIndex++ {
+	for range itemCount {
 		itemStart := pos
 		itemLength := int(util.ReadUint16(data, &pos))
 		itemName := util.ReadString(data, 5, &pos)
@@ -282,7 +283,7 @@ func (p *PlaylistFile) Scan(streamFiles map[string]*StreamFile, clipFiles map[st
 		pos++
 		pos += 5
 
-		for i := 0; i < streamCountVideo; i++ {
+		for range streamCountVideo {
 			st := createPlaylistStream(data, &pos)
 			if st != nil {
 				pid := st.Base().PID
@@ -291,7 +292,7 @@ func (p *PlaylistFile) Scan(streamFiles map[string]*StreamFile, clipFiles map[st
 				}
 			}
 		}
-		for i := 0; i < streamCountAudio; i++ {
+		for range streamCountAudio {
 			st := createPlaylistStream(data, &pos)
 			if st != nil {
 				pid := st.Base().PID
@@ -300,7 +301,7 @@ func (p *PlaylistFile) Scan(streamFiles map[string]*StreamFile, clipFiles map[st
 				}
 			}
 		}
-		for i := 0; i < streamCountPG; i++ {
+		for range streamCountPG {
 			st := createPlaylistStream(data, &pos)
 			if st != nil {
 				pid := st.Base().PID
@@ -309,7 +310,7 @@ func (p *PlaylistFile) Scan(streamFiles map[string]*StreamFile, clipFiles map[st
 				}
 			}
 		}
-		for i := 0; i < streamCountIG; i++ {
+		for range streamCountIG {
 			st := createPlaylistStream(data, &pos)
 			if st != nil {
 				pid := st.Base().PID
@@ -318,7 +319,7 @@ func (p *PlaylistFile) Scan(streamFiles map[string]*StreamFile, clipFiles map[st
 				}
 			}
 		}
-		for i := 0; i < streamCountSecondaryAudio; i++ {
+		for range streamCountSecondaryAudio {
 			st := createPlaylistStream(data, &pos)
 			if st != nil {
 				pid := st.Base().PID
@@ -328,7 +329,7 @@ func (p *PlaylistFile) Scan(streamFiles map[string]*StreamFile, clipFiles map[st
 			}
 			pos += 2
 		}
-		for i := 0; i < streamCountSecondaryVideo; i++ {
+		for range streamCountSecondaryVideo {
 			st := createPlaylistStream(data, &pos)
 			if st != nil {
 				pid := st.Base().PID
@@ -338,7 +339,7 @@ func (p *PlaylistFile) Scan(streamFiles map[string]*StreamFile, clipFiles map[st
 			}
 			pos += 6
 		}
-		for i := 0; i < streamCountPIP; i++ {
+		for range streamCountPIP {
 			_ = createPlaylistStream(data, &pos)
 		}
 
@@ -348,7 +349,7 @@ func (p *PlaylistFile) Scan(streamFiles map[string]*StreamFile, clipFiles map[st
 	pos = chaptersOffset + 4
 	if pos+2 <= len(data) {
 		chapterCount := int(util.ReadUint16(data, &pos))
-		for i := 0; i < chapterCount; i++ {
+		for range chapterCount {
 			if pos+8 > len(data) {
 				break
 			}
@@ -387,11 +388,8 @@ func (p *PlaylistFile) Initialize() {
 			continue
 		}
 		if times, ok := clipTimes[clip.Name]; ok {
-			for _, t := range times {
-				if t == clip.TimeIn {
-					p.HasLoops = true
-					break
-				}
+			if slices.Contains(times, clip.TimeIn) {
+				p.HasLoops = true
 			}
 			clipTimes[clip.Name] = append(times, clip.TimeIn)
 		} else {

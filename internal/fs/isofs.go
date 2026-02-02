@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/s0up4200/go-bdinfo/internal/fs/udf"
+	"github.com/autobrr/go-bdinfo/internal/fs/udf"
 )
 
 // ISOFileSystemImpl implements ISOFileSystem for reading ISO files.

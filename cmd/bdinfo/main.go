@@ -13,9 +13,9 @@ import (
 	"github.com/creativeprojects/go-selfupdate"
 	"github.com/spf13/cobra"
 
-	"github.com/s0up4200/go-bdinfo/internal/bdrom"
-	"github.com/s0up4200/go-bdinfo/internal/report"
-	"github.com/s0up4200/go-bdinfo/internal/settings"
+	"github.com/autobrr/go-bdinfo/internal/bdrom"
+	"github.com/autobrr/go-bdinfo/internal/report"
+	"github.com/autobrr/go-bdinfo/internal/settings"
 )
 
 var version = "dev"
@@ -207,12 +207,12 @@ func runSelfUpdate(ctx context.Context) error {
 		return fmt.Errorf("could not parse version: %w", err)
 	}
 
-	latest, found, err := selfupdate.DetectLatest(ctx, selfupdate.ParseSlug("s0up4200/go-bdinfo"))
+	latest, found, err := selfupdate.DetectLatest(ctx, selfupdate.ParseSlug("autobrr/go-bdinfo"))
 	if err != nil {
 		return fmt.Errorf("error occurred while detecting version: %w", err)
 	}
 	if !found {
-		return fmt.Errorf("latest version for %s/%s could not be found from github repository", "s0up4200/go-bdinfo", version)
+		return fmt.Errorf("latest version for %s/%s could not be found from github repository", "autobrr/go-bdinfo", version)
 	}
 
 	if latest.LessOrEqual(version) {

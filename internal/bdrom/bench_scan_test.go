@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/s0up4200/go-bdinfo/internal/settings"
+	"github.com/autobrr/go-bdinfo/internal/settings"
 )
 
 func BenchmarkScan(b *testing.B) {

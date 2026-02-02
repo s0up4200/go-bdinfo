@@ -78,8 +78,8 @@ homebrew_casks:
   - name: bdinfo
     binaries:
       - bdinfo
-    homepage: "https://github.com/s0up4200/go-bdinfo"
+    homepage: "https://github.com/autobrr/go-bdinfo"
     description: "Go rewrite of BDInfo."
     repository:
-      owner: s0up4200
+      owner: autobrr
       name: "go-bdinfo"

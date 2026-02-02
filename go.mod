@@ -1,4 +1,4 @@
-module github.com/s0up4200/go-bdinfo
+module github.com/autobrr/go-bdinfo
 
 go 1.25
 

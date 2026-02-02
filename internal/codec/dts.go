@@ -3,8 +3,8 @@ package codec
 import (
 	"encoding/binary"
 
-	"github.com/s0up4200/go-bdinfo/internal/buffer"
-	"github.com/s0up4200/go-bdinfo/internal/stream"
+	"github.com/autobrr/go-bdinfo/internal/buffer"
+	"github.com/autobrr/go-bdinfo/internal/stream"
 )
 
 var dtsSampleRates = []int{0, 8000, 16000, 32000, 0, 0, 11025, 22050, 44100, 0, 0, 12000, 24000, 48000, 96000, 192000}

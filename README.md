@@ -14,21 +14,21 @@ Go rewrite of BDInfo.
 - Homebrew (macOS):
 
 ```sh
-brew tap s0up4200/go-bdinfo https://github.com/s0up4200/go-bdinfo
-brew install --cask s0up4200/go-bdinfo/bdinfo
+brew tap autobrr/go-bdinfo https://github.com/autobrr/go-bdinfo
+brew install --cask autobrr/go-bdinfo/bdinfo
 ```
 
 - Go install (requires Go toolchain):
 
 ```sh
-go install github.com/s0up4200/go-bdinfo/cmd/bdinfo@latest
+go install github.com/autobrr/go-bdinfo/cmd/bdinfo@latest
 ```
 
 - Latest release (one-liner, Linux x86_64):
   - Replace `linux_amd64` with `linux_arm64`, `darwin_amd64`, or `darwin_arm64` as needed.
 
 ```sh
-curl -sL "$(curl -s https://api.github.com/repos/s0up4200/go-bdinfo/releases/latest | grep browser_download_url | grep linux_amd64 | cut -d\" -f4)" | tar -xz -C /usr/local/bin
+curl -sL "$(curl -s https://api.github.com/repos/autobrr/go-bdinfo/releases/latest | grep browser_download_url | grep linux_amd64 | cut -d\" -f4)" | tar -xz -C /usr/local/bin
 ```
 
 ## Usage

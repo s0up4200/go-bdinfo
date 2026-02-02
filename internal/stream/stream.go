@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/s0up4200/go-bdinfo/internal/lang"
+	"github.com/autobrr/go-bdinfo/internal/lang"
 )
 
 // Stream is the base transport stream entry.

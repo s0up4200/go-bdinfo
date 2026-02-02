@@ -3,8 +3,8 @@ package codec
 import (
 	"encoding/binary"
 
-	"github.com/s0up4200/go-bdinfo/internal/buffer"
-	"github.com/s0up4200/go-bdinfo/internal/stream"
+	"github.com/autobrr/go-bdinfo/internal/buffer"
+	"github.com/autobrr/go-bdinfo/internal/stream"
 )
 
 func ScanTrueHD(a *stream.AudioStream, data []byte) {

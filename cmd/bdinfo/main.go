@@ -43,10 +43,25 @@ type rootOptions struct {
 
 var opts rootOptions
 
+const helpBanner = "" +
+	"                                                                                \n" +
+	"██████╗ ██████╗ ██╗███╗   ██╗███████╗ ██████╗\n" +
+	"██╔══██╗██╔══██╗██║████╗  ██║██╔════╝██╔═══██╗\n" +
+	"██████╔╝██║  ██║██║██╔██╗ ██║█████╗  ██║   ██║\n" +
+	"██╔══██╗██║  ██║██║██║╚██╗██║██╔══╝  ██║   ██║\n" +
+	"██████╔╝██████╔╝██║██║ ╚████║██║     ╚██████╔╝\n" +
+	"╚═════╝ ╚═════╝ ╚═╝╚═╝  ╚═══╝╚═╝      ╚═════╝"
+
+const helpTemplate = helpBanner + `
+
+{{with or .Long .Short}}{{. | trimTrailingWhitespaces}}
+
+{{end}}{{if or .Runnable .HasSubCommands}}{{.UsageString}}{{end}}`
+
 var rootCmd = &cobra.Command{
 	Use:           "bdinfo <path>",
 	Short:         "Go rewrite of BDInfo.",
-	Args:          cobra.ExactArgs(1),
+	Args:          cobra.MaximumNArgs(1),
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	RunE:          runRoot,
@@ -75,6 +90,7 @@ var versionCmd = &cobra.Command{
 func init() {
 	rootCmd.SetOut(os.Stdout)
 	rootCmd.SetErr(os.Stderr)
+	rootCmd.SetHelpTemplate(helpTemplate)
 
 	rootCmd.Flags().StringVarP(&opts.reportFile, "reportfilename", "o", "", "The report filename with extension (use - for stdout)")
 	rootCmd.Flags().BoolVar(&opts.stdout, "stdout", false, "Write report to stdout")
@@ -109,6 +125,13 @@ func main() {
 func runRoot(cmd *cobra.Command, args []string) error {
 	if opts.selfUpdate {
 		return runSelfUpdate(cmd.Context())
+	}
+
+	if len(args) == 0 {
+		if cmd.Flags().NFlag() == 0 {
+			return cmd.Help()
+		}
+		return errors.New("path is required")
 	}
 
 	opts.path = args[0]

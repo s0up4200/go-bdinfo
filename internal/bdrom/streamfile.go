@@ -18,9 +18,6 @@ const (
 	maxStreamDataVideo = 5 * 1024 * 1024
 	maxStreamDataAudio = 256 * 1024
 	maxStreamDataOther = 128 * 1024
-	codecScanStepVideo = 256 * 1024
-	codecScanStepAudio = 64 * 1024
-	codecScanStepOther = 32 * 1024
 )
 
 var (
@@ -98,9 +95,6 @@ type streamState struct {
 	pesPtsDtsFlags      byte
 	pesStarted          bool
 	collectDiagnostics  bool
-	codecScanStep       int
-	codecScanNext       int
-	codecScannedLen     int
 }
 
 func NewStreamFile(fileInfo fs.FileInfo) *StreamFile {
@@ -211,8 +205,6 @@ func (s *StreamFile) Scan(playlists []*PlaylistFile, full bool) error {
 			codecData:          getCodecBuffer(dataCap),
 			pesPacketRemaining: -2,
 			collectDiagnostics: collectDiagnostics,
-			codecScanStep:      codecScanStep(dataCap),
-			codecScanNext:      min(codecScanStep(dataCap), dataCap),
 		}
 		if collectDiagnostics {
 			if _, ok := s.StreamDiagnostics[pid]; !ok {
@@ -341,14 +333,8 @@ func (s *StreamFile) Scan(playlists []*PlaylistFile, full bool) error {
 	}
 
 	processPacket(first[:packetSize])
-	stopEarly := false
-	if !full {
-		if s.tryInitializeStreams(states, scanSettings) {
-			stopEarly = true
-		}
-	}
 	buf := make([]byte, packetSize*256)
-	for !stopEarly {
+	for {
 		n, err := io.ReadFull(reader, buf)
 		if err != nil {
 			if err == io.ErrUnexpectedEOF {
@@ -359,11 +345,6 @@ func (s *StreamFile) Scan(playlists []*PlaylistFile, full bool) error {
 		}
 		for i := 0; i+packetSize <= n; i += packetSize {
 			processPacket(buf[i : i+packetSize])
-		}
-		if !full {
-			if s.tryInitializeStreams(states, scanSettings) {
-				stopEarly = true
-			}
 		}
 		if err != nil {
 			break
@@ -393,121 +374,44 @@ func (s *StreamFile) Scan(playlists []*PlaylistFile, full bool) error {
 		if state == nil {
 			continue
 		}
-		s.scanCodecForStream(st, state, scanSettings)
+		data := state.codecData
+		switch concrete := st.(type) {
+		case *stream.VideoStream:
+			switch concrete.StreamType {
+			case stream.StreamTypeAVCVideo:
+				var tag *string
+				if state.collectDiagnostics {
+					tag = &state.streamTag
+				}
+				codec.ScanAVC(concrete, data, tag)
+			case stream.StreamTypeHEVCVideo:
+				codec.ScanHEVC(concrete, data, scanSettings)
+			case stream.StreamTypeMPEG2Video:
+				codec.ScanMPEG2(concrete, data)
+			case stream.StreamTypeVC1Video:
+				codec.ScanVC1(concrete, data)
+			}
+		case *stream.AudioStream:
+			switch concrete.StreamType {
+			case stream.StreamTypeAC3Audio, stream.StreamTypeAC3PlusAudio, stream.StreamTypeAC3PlusSecondaryAudio:
+				codec.ScanAC3(concrete, data)
+			case stream.StreamTypeAC3TrueHDAudio:
+				codec.ScanTrueHD(concrete, data)
+			case stream.StreamTypeDTSAudio:
+				codec.ScanDTS(concrete, data, int64(concrete.BitRate))
+			case stream.StreamTypeDTSHDAudio, stream.StreamTypeDTSHDMasterAudio, stream.StreamTypeDTSHDSecondaryAudio:
+				codec.ScanDTSHD(concrete, data, int64(concrete.BitRate))
+			case stream.StreamTypeLPCMAudio:
+				codec.ScanLPCM(concrete, data)
+			case stream.StreamTypeMPEG2AACAudio, stream.StreamTypeMPEG4AACAudio:
+				codec.ScanAAC(concrete, data)
+			}
+		case *stream.GraphicsStream:
+			codec.ScanPGS(concrete, data)
+		}
 	}
 
 	return nil
-}
-
-func codecScanStep(capacity int) int {
-	switch capacity {
-	case maxStreamDataVideo:
-		return codecScanStepVideo
-	case maxStreamDataAudio:
-		return codecScanStepAudio
-	default:
-		return codecScanStepOther
-	}
-}
-
-func (s *StreamFile) scanCodecForStream(info stream.Info, state *streamState, scanSettings settings.Settings) {
-	if info == nil || state == nil {
-		return
-	}
-	data := state.codecData
-	switch concrete := info.(type) {
-	case *stream.VideoStream:
-		switch concrete.StreamType {
-		case stream.StreamTypeAVCVideo:
-			var tag *string
-			if state.collectDiagnostics {
-				tag = &state.streamTag
-			}
-			codec.ScanAVC(concrete, data, tag)
-		case stream.StreamTypeHEVCVideo:
-			codec.ScanHEVC(concrete, data, scanSettings)
-		case stream.StreamTypeMPEG2Video:
-			codec.ScanMPEG2(concrete, data)
-		case stream.StreamTypeVC1Video:
-			codec.ScanVC1(concrete, data)
-		}
-	case *stream.AudioStream:
-		switch concrete.StreamType {
-		case stream.StreamTypeAC3Audio, stream.StreamTypeAC3PlusAudio, stream.StreamTypeAC3PlusSecondaryAudio:
-			codec.ScanAC3(concrete, data)
-		case stream.StreamTypeAC3TrueHDAudio:
-			codec.ScanTrueHD(concrete, data)
-		case stream.StreamTypeDTSAudio:
-			codec.ScanDTS(concrete, data, int64(concrete.BitRate))
-		case stream.StreamTypeDTSHDAudio, stream.StreamTypeDTSHDMasterAudio, stream.StreamTypeDTSHDSecondaryAudio:
-			codec.ScanDTSHD(concrete, data, int64(concrete.BitRate))
-		case stream.StreamTypeLPCMAudio:
-			codec.ScanLPCM(concrete, data)
-		case stream.StreamTypeMPEG2AACAudio, stream.StreamTypeMPEG4AACAudio:
-			codec.ScanAAC(concrete, data)
-		}
-	case *stream.GraphicsStream:
-		codec.ScanPGS(concrete, data)
-	}
-}
-
-func (s *StreamFile) tryInitializeStreams(states map[uint16]*streamState, scanSettings settings.Settings) bool {
-	for pid, info := range s.Streams {
-		if info == nil {
-			continue
-		}
-		state := states[pid]
-		if state == nil || state.codecData == nil {
-			continue
-		}
-		base := info.Base()
-		if base.IsInitialized {
-			continue
-		}
-		if len(state.codecData) == 0 {
-			continue
-		}
-		if len(state.codecData) <= state.codecScannedLen {
-			continue
-		}
-		if len(state.codecData) < state.codecScanNext {
-			continue
-		}
-		s.scanCodecForStream(info, state, scanSettings)
-		state.codecScannedLen = len(state.codecData)
-		if !base.IsInitialized {
-			next := state.codecScannedLen + state.codecScanStep
-			if next > cap(state.codecData) {
-				next = cap(state.codecData)
-			}
-			state.codecScanNext = next
-		}
-	}
-	return s.streamsInitialized()
-}
-
-func (s *StreamFile) streamsInitialized() bool {
-	hasAVC := false
-	hasMVC := false
-	for _, info := range s.Streams {
-		if info == nil {
-			continue
-		}
-		base := info.Base()
-		if !base.IsInitialized {
-			return false
-		}
-		switch base.StreamType {
-		case stream.StreamTypeAVCVideo:
-			hasAVC = true
-		case stream.StreamTypeMVCVideo:
-			hasMVC = true
-		}
-	}
-	if hasMVC && !hasAVC {
-		return false
-	}
-	return true
 }
 
 func (s *StreamFile) handleTimestamp(playlists []*PlaylistFile, states map[uint16]*streamState, pid uint16, state *streamState, ts uint64, isVideo bool, firstTS *uint64, lastTS *uint64) {

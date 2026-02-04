@@ -212,14 +212,17 @@ func TestPlaylistFile_TotalBitRate(t *testing.T) {
 	}
 }
 
-// TestPlaylistFile_Scan_Integration tests parsing with a real MPLS file
-// This test requires a BDMV folder structure to be set via environment variable
+// TestPlaylistFile_Scan_Integration tests playlist parsing with real Blu-ray discs.
 //
-// To run this test, set the BDINFO_TEST_PATH environment variable:
+// To run this test, set the BDINFO_TEST_PATH environment variable to either:
 //
-//	Windows PowerShell: $env:BDINFO_TEST_PATH="D:\Movies\SomeBluray"
-//	Windows CMD:        set BDINFO_TEST_PATH=D:\Movies\SomeBluray
-//	Linux/Mac:          export BDINFO_TEST_PATH="/path/to/bluray"
+//   - A single Blu-ray disc path (containing BDMV folder)
+//
+//   - A folder containing multiple Blu-ray disc subfolders
+//
+//     Windows PowerShell: $env:BDINFO_TEST_PATH="D:\Movies"
+//     Windows CMD:        set BDINFO_TEST_PATH=D:\Movies
+//     Linux/Mac:          export BDINFO_TEST_PATH="/path/to/movies"
 //
 // Then run: go test -v ./internal/bdrom -run TestPlaylistFile_Scan_Integration
 func TestPlaylistFile_Scan_Integration(t *testing.T) {
@@ -228,12 +231,51 @@ func TestPlaylistFile_Scan_Integration(t *testing.T) {
 		t.Skip("BDINFO_TEST_PATH not set, skipping integration test")
 	}
 
-	playlistPath := filepath.Join(bdPath, "BDMV", "PLAYLIST")
-	if _, err := os.Stat(playlistPath); os.IsNotExist(err) {
-		t.Skipf("Playlist directory not found: %s", playlistPath)
+	// Check if it's a single Blu-ray disc or a folder of discs
+	singleDiscPlaylistPath := filepath.Join(bdPath, "BDMV", "PLAYLIST")
+	isSingleDisc := false
+	if _, err := os.Stat(singleDiscPlaylistPath); err == nil {
+		isSingleDisc = true
 	}
 
-	t.Logf("Testing with Blu-ray at: %s", bdPath)
+	var discPaths []string
+	if isSingleDisc {
+		discPaths = []string{bdPath}
+	} else {
+		// Find all subdirectories containing BDMV folders
+		entries, err := os.ReadDir(bdPath)
+		if err != nil {
+			t.Fatalf("Failed to read directory %s: %v", bdPath, err)
+		}
+
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			subPath := filepath.Join(bdPath, entry.Name())
+			bdmvPath := filepath.Join(subPath, "BDMV", "PLAYLIST")
+			if _, err := os.Stat(bdmvPath); err == nil {
+				discPaths = append(discPaths, subPath)
+			}
+		}
+
+		if len(discPaths) == 0 {
+			t.Skipf("No Blu-ray discs found in %s", bdPath)
+		}
+	}
+
+	t.Logf("Testing %d Blu-ray disc(s)", len(discPaths))
+
+	for _, discPath := range discPaths {
+		discName := filepath.Base(discPath)
+		t.Run(discName, func(t *testing.T) {
+			testSingleDisc(t, discPath, discName)
+		})
+	}
+}
+
+func testSingleDisc(t *testing.T, bdPath, discName string) {
+	t.Logf("Testing Blu-ray: %s", discName)
 
 	rom, err := New(bdPath, settings.Default("."))
 	if err != nil {
@@ -245,29 +287,112 @@ func TestPlaylistFile_Scan_Integration(t *testing.T) {
 		t.Fatal("No playlist files found")
 	}
 
-	// Test scanning first playlist
-	var firstPlaylist *PlaylistFile
+	// Scan all playlists
 	for _, pl := range rom.PlaylistFiles {
-		firstPlaylist = pl
-		break
+		err := pl.Scan(rom.StreamFiles, rom.StreamClipFiles)
+		if err != nil {
+			t.Logf("Warning: Failed to scan playlist %s: %v", pl.Name, err)
+			continue
+		}
 	}
 
-	err = firstPlaylist.Scan(rom.StreamFiles, rom.StreamClipFiles)
-	if err != nil {
-		t.Fatalf("Failed to scan playlist %s: %v", firstPlaylist.Name, err)
+	// Test selectMainPlaylist logic - it should pick the playlist with best composite score
+	// For Hold.Me.Back.2020, it should select 00010.MPLS (2h 14min, 40GB) over shorter playlists
+	candidatePlaylists := make([]*PlaylistFile, 0, len(rom.PlaylistFiles))
+	for _, pl := range rom.PlaylistFiles {
+		if pl.IsInitialized {
+			candidatePlaylists = append(candidatePlaylists, pl)
+		}
 	}
 
-	t.Logf("Playlist: %s", firstPlaylist.Name)
-	t.Logf("  Type: %s", firstPlaylist.FileType)
-	t.Logf("  Clips: %d", len(firstPlaylist.StreamClips))
-	t.Logf("  Duration: %.1f seconds", firstPlaylist.TotalLength())
-	t.Logf("  File Size: %d bytes", firstPlaylist.FileSize())
+	if len(candidatePlaylists) == 0 {
+		t.Fatal("No successfully scanned playlists found")
+	}
 
-	if len(firstPlaylist.StreamClips) == 0 {
+	// Helper function to get largest file size (matching report.go logic)
+	largestFileSize := func(pl *PlaylistFile) uint64 {
+		var maxSize uint64
+		for _, clip := range pl.StreamClips {
+			if clip.AngleIndex == 0 && clip.FileSize > maxSize {
+				maxSize = clip.FileSize
+			}
+		}
+		return maxSize
+	}
+
+	// Log all playlists for debugging
+	t.Log("\nAll playlists found:")
+	for _, pl := range candidatePlaylists {
+		largestFile := largestFileSize(pl)
+		totalSize := pl.FileSize()
+		duration := pl.TotalLength()
+		fileConcentration := float64(0)
+		if totalSize > 0 {
+			fileConcentration = float64(largestFile) / float64(totalSize)
+		}
+
+		// Calculate score using same logic as report.go
+		maxFileSize := 100.0 * 1024 * 1024 * 1024
+		maxTotalSize := 150.0 * 1024 * 1024 * 1024
+		maxDuration := 14400.0
+
+		score := (float64(largestFile)/maxFileSize)*40.0 +
+			(float64(totalSize)/maxTotalSize)*30.0 +
+			(duration/maxDuration)*20.0 +
+			fileConcentration*10.0
+
+		t.Logf("  %s: duration=%.1fs, totalSize=%d, largestFile=%d, concentration=%.3f, score=%.2f",
+			pl.Name, duration, totalSize, largestFile, fileConcentration, score)
+	}
+
+	// Find the playlist with highest score (main feature)
+	var mainPlaylist *PlaylistFile
+	maxScore := -1.0
+	for _, pl := range candidatePlaylists {
+		largestFile := largestFileSize(pl)
+		totalSize := pl.FileSize()
+		duration := pl.TotalLength()
+		fileConcentration := float64(0)
+		if totalSize > 0 {
+			fileConcentration = float64(largestFile) / float64(totalSize)
+		}
+
+		maxFileSize := 100.0 * 1024 * 1024 * 1024
+		maxTotalSize := 150.0 * 1024 * 1024 * 1024
+		maxDuration := 14400.0
+
+		score := (float64(largestFile)/maxFileSize)*40.0 +
+			(float64(totalSize)/maxTotalSize)*30.0 +
+			(duration/maxDuration)*20.0 +
+			fileConcentration*10.0
+
+		if score > maxScore {
+			maxScore = score
+			mainPlaylist = pl
+		}
+	}
+
+	if mainPlaylist == nil {
+		t.Fatal("Failed to select main playlist")
+	}
+
+	t.Logf("\nSelected main playlist: %s (score: %.2f)", mainPlaylist.Name, maxScore)
+	t.Logf("  Type: %s", mainPlaylist.FileType)
+	t.Logf("  Clips: %d", len(mainPlaylist.StreamClips))
+	t.Logf("  Duration: %.1f seconds (%.1f minutes)", mainPlaylist.TotalLength(), mainPlaylist.TotalLength()/60)
+	t.Logf("  File Size: %d bytes (%.1f GB)", mainPlaylist.FileSize(), float64(mainPlaylist.FileSize())/(1024*1024*1024))
+	t.Logf("  Largest File: %d bytes (%.1f GB)", largestFileSize(mainPlaylist), float64(largestFileSize(mainPlaylist))/(1024*1024*1024))
+
+	// Verify main feature is reasonably long (should be at least 30 minutes for a movie)
+	if mainPlaylist.TotalLength() < 1800 {
+		t.Errorf("Main playlist duration is suspiciously short: %.1f seconds", mainPlaylist.TotalLength())
+	}
+
+	if len(mainPlaylist.StreamClips) == 0 {
 		t.Error("Expected at least one stream clip")
 	}
 
-	if firstPlaylist.FileType == "" {
+	if mainPlaylist.FileType == "" {
 		t.Error("FileType should not be empty")
 	}
 }

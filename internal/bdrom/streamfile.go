@@ -103,6 +103,7 @@ type streamState struct {
 	pesHeaderParsed     bool
 	pesPtsDtsFlags      byte
 	pesStarted          bool
+	pesStartCount       uint64
 	collectDiagnostics  bool
 }
 
@@ -131,6 +132,10 @@ func (s *StreamFile) Scan(playlists []*PlaylistFile, full bool) error {
 		return nil
 	}
 
+	// Match BDInfo: TSStreamFile.Length is derived from parsed timestamps (DTS-based) and
+	// starts at 0. Do not seed it from playlist clip lengths (can differ for tiny/partial captures).
+	s.Length = 0
+
 	// ensure streams map populated from clip info
 	if len(s.Streams) == 0 {
 		for _, pl := range playlists {
@@ -145,19 +150,6 @@ func (s *StreamFile) Scan(playlists []*PlaylistFile, full bool) error {
 			}
 		}
 	}
-
-	// compute length from playlists
-	playlistLength := 0.0
-	for _, pl := range playlists {
-		for _, clip := range pl.StreamClips {
-			if clip.StreamFile == s && clip.AngleIndex == 0 {
-				if clip.Length > playlistLength {
-					playlistLength = clip.Length
-				}
-			}
-		}
-	}
-	s.Length = playlistLength
 
 	scanSettings := settings.Settings{}
 	if len(playlists) > 0 {
@@ -269,7 +261,19 @@ func (s *StreamFile) Scan(playlists []*PlaylistFile, full bool) error {
 		if len(payload) == 0 {
 			return
 		}
-		if payloadStart {
+		// Payload unit start is a hint; validate PES start code to avoid false starts (BDInfo scans for 0x000001).
+		isPESStart := payloadStart && len(payload) >= 4 && payload[0] == 0x00 && payload[1] == 0x00 && payload[2] == 0x01
+		if isPESStart && isVideo {
+			streamID := payload[3]
+			// Match BDInfo header detection: video accepts 0xFD or 0xE0-0xEF.
+			if !(streamID == 0xFD || (streamID >= 0xE0 && streamID <= 0xEF)) {
+				isPESStart = false
+			}
+		}
+
+		if isPESStart {
+			state.pesStartCount++
+
 			// Match BDInfo: HEVC per-transfer tags are derived from the previous PES transfer
 			// (ScanStream runs when a new payload starts, ending the prior transfer).
 			if state.collectDiagnostics && isVideo {
@@ -546,6 +550,17 @@ func (s *StreamFile) Scan(playlists []*PlaylistFile, full bool) error {
 		if state == nil {
 			continue
 		}
+		// Match BDInfo: codec analyzers run on completed PES transfers (ScanStream). A tiny/cutoff
+		// stream file can contain a single PES transfer that never terminates (no next PES start and
+		// no bounded packet length), in which case BDInfo leaves codec fields uninitialized.
+		//
+		// Approximation: require at least one completed transfer (2x PES starts), or an explicit
+		// bounded PES length that reached 0.
+		canScanCodec := full || state.pesStartCount >= 2 || (state.pesStarted && state.pesPacketRemaining == 0)
+		if !canScanCodec {
+			continue
+		}
+
 		data := state.codecData
 		switch concrete := st.(type) {
 		case *stream.VideoStream:

@@ -326,40 +326,39 @@ func WriteReport(path string, bd *bdrom.BDROM, playlists []*bdrom.PlaylistFile, 
 			fmt.Fprintf(&b, "%sEnd group%s\n\n\n", separator, separator)
 		}
 
-		if len(playlist.Chapters) > 0 {
-			b.WriteString("\n\nCHAPTERS:\n\n\n")
-			fmt.Fprintf(&b, "%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s\n",
-				"Number",
-				"Time In",
-				"Length",
-				"Avg Video Rate",
-				"Max 1-Sec Rate",
-				"Max 1-Sec Time",
-				"Max 5-Sec Rate",
-				"Max 5-Sec Time",
-				"Max 10Sec Rate",
-				"Max 10Sec Time",
-				"Avg Frame Size",
-				"Max Frame Size",
-				"Max Frame Time",
-			)
-			fmt.Fprintf(&b, "%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s\n",
-				"------",
-				"-------",
-				"------",
-				"--------------",
-				"--------------",
-				"--------------",
-				"--------------",
-				"--------------",
-				"--------------",
-				"--------------",
-				"--------------",
-				"--------------",
-				"--------------",
-			)
-			writeChapters(&b, playlist)
-		}
+		// Match official BDInfo: always print the CHAPTERS section (even when empty).
+		b.WriteString("\n\nCHAPTERS:\n\n\n")
+		fmt.Fprintf(&b, "%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s\n",
+			"Number",
+			"Time In",
+			"Length",
+			"Avg Video Rate",
+			"Max 1-Sec Rate",
+			"Max 1-Sec Time",
+			"Max 5-Sec Rate",
+			"Max 5-Sec Time",
+			"Max 10Sec Rate",
+			"Max 10Sec Time",
+			"Avg Frame Size",
+			"Max Frame Size",
+			"Max Frame Time",
+		)
+		fmt.Fprintf(&b, "%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s%-16s\n",
+			"------",
+			"-------",
+			"------",
+			"--------------",
+			"--------------",
+			"--------------",
+			"--------------",
+			"--------------",
+			"--------------",
+			"--------------",
+			"--------------",
+			"--------------",
+			"--------------",
+		)
+		writeChapters(&b, playlist)
 
 		if settings.GenerateStreamDiagnostics {
 			b.WriteString("\n\nSTREAM DIAGNOSTICS:\n\n\n")
@@ -711,7 +710,7 @@ func buildSummaryOnly(bd *bdrom.BDROM, playlists []*bdrom.PlaylistFile, settings
 
 func formatMbps(bitrate uint64) string {
 	if bitrate == 0 {
-		return "0"
+		return "0.00"
 	}
 	val := math.RoundToEven(float64(bitrate)/10000.0) / 100.0
 	return fmt.Sprintf("%.2f", val)

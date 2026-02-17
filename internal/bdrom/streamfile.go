@@ -93,6 +93,9 @@ type streamState struct {
 	vc1SeqHeaderParse   byte
 	vc1IsInterlaced     bool
 	mpeg2PictureParse   byte
+	hevcTagBuf          []byte
+	hevcTagState        codec.HEVCTagState
+	hevcTagInitialized  bool
 	pesHeaderRemaining  int
 	pesHeaderExtraKnown bool
 	pesPacketRemaining  int
@@ -267,6 +270,26 @@ func (s *StreamFile) Scan(playlists []*PlaylistFile, full bool) error {
 			return
 		}
 		if payloadStart {
+			// Match BDInfo: HEVC per-transfer tags are derived from the previous PES transfer
+			// (ScanStream runs when a new payload starts, ending the prior transfer).
+			if state.collectDiagnostics && isVideo {
+				if vs, ok := st.(*stream.VideoStream); ok && vs.StreamType == stream.StreamTypeHEVCVideo {
+					// Avoid stale tags: if we don't have any bytes for the prior transfer, treat it as no tag.
+					if state.hevcTagBuf == nil {
+						state.streamTag = ""
+					} else {
+						state.streamTag = codec.HEVCFrameTagFromTransfer(&state.hevcTagState, state.hevcTagBuf, state.hevcTagInitialized)
+						state.hevcTagBuf = state.hevcTagBuf[:0]
+					}
+					// Match BDInfo: HEVC tag scan switches to "initialized" behavior once an SPS has been seen.
+					if !state.hevcTagInitialized && state.hevcTagState.HasSPS() {
+						state.hevcTagInitialized = true
+						// After init, we only need a small prefix to find the first slice tag.
+						state.hevcTagBuf = make([]byte, 0, 64<<10)
+					}
+				}
+			}
+
 			state.pesStarted = true
 			state.pesHeaderRemaining = 9
 			state.pesHeaderExtraKnown = false
@@ -324,99 +347,120 @@ func (s *StreamFile) Scan(playlists []*PlaylistFile, full bool) error {
 		if known {
 			state.windowBytes += uint64(len(payload))
 		}
+
 		// Match BDInfo: capture per-transfer stream tag for chapter/frame stats.
-		// The tag is derived from the codec bitstream and can be empty when the scan
-		// does not encounter the expected marker in this transfer.
-		if state.collectDiagnostics && isVideo && state.streamTag == "" && len(payload) > 0 {
+		// HEVC tags are derived from slice headers and depend on SPS/PPS state; collect a bounded
+		// prefix of the current transfer and resolve when the next payload starts.
+		if state.collectDiagnostics && isVideo && len(payload) > 0 {
 			if vs, ok := st.(*stream.VideoStream); ok {
-				switch vs.StreamType {
-				case stream.StreamTypeAVCVideo:
-					for i := 0; i < len(payload) && state.streamTag == ""; i++ {
-						state.tagParse = (state.tagParse << 8) | uint32(payload[i])
-						if state.avcAUDParse > 0 {
-							state.avcAUDParse--
-							if state.avcAUDParse == 0 {
-								switch (state.tagParse & 0xFF) >> 5 {
-								case 0, 3, 5:
-									state.streamTag = "I"
-								case 1, 4, 6:
-									state.streamTag = "P"
-								case 2, 7:
-									state.streamTag = "B"
-								}
-							}
-							continue
-						}
-						if state.tagParse == 0x00000109 {
-							state.avcAUDParse = 1
+				if vs.StreamType == stream.StreamTypeHEVCVideo {
+					if state.hevcTagBuf == nil {
+						// Match BDInfo: before initialization, TSStreamBuffer captures up to 5MB
+						// and HEVC tag selection can depend on later slices overwriting earlier ones.
+						if state.hevcTagInitialized {
+							state.hevcTagBuf = make([]byte, 0, 64<<10)
+						} else {
+							state.hevcTagBuf = make([]byte, 0, 5*1024*1024)
 						}
 					}
-				case stream.StreamTypeMPEG2Video:
-					for i := 0; i < len(payload) && state.streamTag == ""; i++ {
-						state.tagParse = (state.tagParse << 8) | uint32(payload[i])
-						if state.tagParse == 0x00000100 {
-							state.mpeg2PictureParse = 2
-							continue
-						}
-						if state.mpeg2PictureParse > 0 {
-							state.mpeg2PictureParse--
-							if state.mpeg2PictureParse == 0 {
-								switch (state.tagParse & 0x38) >> 3 {
-								case 1:
-									state.streamTag = "I"
-								case 2:
-									state.streamTag = "P"
-								case 3:
-									state.streamTag = "B"
-								}
-							}
+					if len(state.hevcTagBuf) < cap(state.hevcTagBuf) {
+						need := cap(state.hevcTagBuf) - len(state.hevcTagBuf)
+						if len(payload) > need {
+							state.hevcTagBuf = append(state.hevcTagBuf, payload[:need]...)
+						} else {
+							state.hevcTagBuf = append(state.hevcTagBuf, payload...)
 						}
 					}
-				case stream.StreamTypeVC1Video:
-					for i := 0; i < len(payload) && state.streamTag == ""; i++ {
-						state.tagParse = (state.tagParse << 8) | uint32(payload[i])
-						if state.tagParse == 0x0000010D {
-							state.vc1FrameHeaderParse = 4
-							continue
-						}
-						if state.vc1FrameHeaderParse > 0 {
-							state.vc1FrameHeaderParse--
-							if state.vc1FrameHeaderParse == 0 {
-								parse := state.tagParse
-								var pictureType uint32
-								if state.vc1IsInterlaced {
-									if (parse & 0x80000000) == 0 {
-										pictureType = (parse & 0x78000000) >> 13
-									} else {
-										pictureType = (parse & 0x3c000000) >> 12
+				} else if state.streamTag == "" {
+					switch vs.StreamType {
+					case stream.StreamTypeAVCVideo:
+						for i := 0; i < len(payload) && state.streamTag == ""; i++ {
+							state.tagParse = (state.tagParse << 8) | uint32(payload[i])
+							if state.avcAUDParse > 0 {
+								state.avcAUDParse--
+								if state.avcAUDParse == 0 {
+									switch (state.tagParse & 0xFF) >> 5 {
+									case 0, 3, 5:
+										state.streamTag = "I"
+									case 1, 4, 6:
+										state.streamTag = "P"
+									case 2, 7:
+										state.streamTag = "B"
 									}
-								} else {
-									pictureType = (parse & 0xf0000000) >> 14
 								}
-								switch {
-								case (pictureType & 0x20000) == 0:
-									state.streamTag = "P"
-								case (pictureType & 0x10000) == 0:
-									state.streamTag = "B"
-								case (pictureType & 0x8000) == 0:
-									state.streamTag = "I"
-								case (pictureType & 0x4000) == 0:
-									state.streamTag = "BI"
-								default:
-									// Leave empty (null in the official output).
-									state.streamTag = ""
+								continue
+							}
+							if state.tagParse == 0x00000109 {
+								state.avcAUDParse = 1
+							}
+						}
+					case stream.StreamTypeMPEG2Video:
+						for i := 0; i < len(payload) && state.streamTag == ""; i++ {
+							state.tagParse = (state.tagParse << 8) | uint32(payload[i])
+							if state.tagParse == 0x00000100 {
+								state.mpeg2PictureParse = 2
+								continue
+							}
+							if state.mpeg2PictureParse > 0 {
+								state.mpeg2PictureParse--
+								if state.mpeg2PictureParse == 0 {
+									switch (state.tagParse & 0x38) >> 3 {
+									case 1:
+										state.streamTag = "I"
+									case 2:
+										state.streamTag = "P"
+									case 3:
+										state.streamTag = "B"
+									}
 								}
 							}
-							continue
 						}
-						if state.tagParse == 0x0000010F {
-							state.vc1SeqHeaderParse = 6
-							continue
-						}
-						if state.vc1SeqHeaderParse > 0 {
-							state.vc1SeqHeaderParse--
-							if state.vc1SeqHeaderParse == 0 {
-								state.vc1IsInterlaced = (state.tagParse&0x40)>>6 > 0
+					case stream.StreamTypeVC1Video:
+						for i := 0; i < len(payload) && state.streamTag == ""; i++ {
+							state.tagParse = (state.tagParse << 8) | uint32(payload[i])
+							if state.tagParse == 0x0000010D {
+								state.vc1FrameHeaderParse = 4
+								continue
+							}
+							if state.vc1FrameHeaderParse > 0 {
+								state.vc1FrameHeaderParse--
+								if state.vc1FrameHeaderParse == 0 {
+									parse := state.tagParse
+									var pictureType uint32
+									if state.vc1IsInterlaced {
+										if (parse & 0x80000000) == 0 {
+											pictureType = (parse & 0x78000000) >> 13
+										} else {
+											pictureType = (parse & 0x3c000000) >> 12
+										}
+									} else {
+										pictureType = (parse & 0xf0000000) >> 14
+									}
+									switch {
+									case (pictureType & 0x20000) == 0:
+										state.streamTag = "P"
+									case (pictureType & 0x10000) == 0:
+										state.streamTag = "B"
+									case (pictureType & 0x8000) == 0:
+										state.streamTag = "I"
+									case (pictureType & 0x4000) == 0:
+										state.streamTag = "BI"
+									default:
+										// Leave empty (null in the official output).
+										state.streamTag = ""
+									}
+								}
+								continue
+							}
+							if state.tagParse == 0x0000010F {
+								state.vc1SeqHeaderParse = 6
+								continue
+							}
+							if state.vc1SeqHeaderParse > 0 {
+								state.vc1SeqHeaderParse--
+								if state.vc1SeqHeaderParse == 0 {
+									state.vc1IsInterlaced = (state.tagParse&0x40)>>6 > 0
+								}
 							}
 						}
 					}
@@ -705,14 +749,17 @@ func (s *StreamFile) updateStreamBitrate(playlists []*PlaylistFile, pid uint16, 
 					Packets:  state.windowPackets,
 					Tag:      state.streamTag,
 				})
-				// Match BDInfo: tag parsing state resets per transfer.
-				state.streamTag = ""
-				state.tagParse = 0
-				state.avcAUDParse = 0
-				state.vc1FrameHeaderParse = 0
-				state.vc1SeqHeaderParse = 0
-				state.vc1IsInterlaced = false
-				state.mpeg2PictureParse = 0
+				// Match the existing parity behavior: reset tag parsing state after emitting
+				// a diagnostics row, but keep HEVC tags until the next transfer boundary.
+				if v, ok := streamInfo.(*stream.VideoStream); !ok || v.StreamType != stream.StreamTypeHEVCVideo {
+					state.streamTag = ""
+					state.tagParse = 0
+					state.avcAUDParse = 0
+					state.vc1FrameHeaderParse = 0
+					state.vc1SeqHeaderParse = 0
+					state.vc1IsInterlaced = false
+					state.mpeg2PictureParse = 0
+				}
 			} else {
 				streamInfo.Base().PacketSeconds += streamInterval
 			}

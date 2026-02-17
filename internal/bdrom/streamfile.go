@@ -441,7 +441,15 @@ func (s *StreamFile) Scan(playlists []*PlaylistFile, full bool) error {
 	}
 
 	processPacket(first[:packetSize])
-	buf := make([]byte, packetSize*256)
+
+	// Match official BDInfo behavior/perf: read large chunks and then walk packets.
+	// (Official uses ~5MB chunks; keep ours aligned to TS packet size.)
+	const targetChunk = 5 * 1024 * 1024
+	chunkSize := targetChunk - (targetChunk % packetSize)
+	if chunkSize < packetSize {
+		chunkSize = packetSize * 256
+	}
+	buf := make([]byte, chunkSize)
 	for {
 		n, err := io.ReadFull(reader, buf)
 		if err != nil {

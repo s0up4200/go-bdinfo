@@ -3,7 +3,10 @@
 ## Overview
 This project is a Go implementation of BDInfo, a tool for analyzing Blu-ray disc structures. The original is written in C# and we're creating a pure Go version without CGO dependencies.
 
-**IMPORTANT**: Always refer to the original C# source code in the `BDInfo-master/` directory for implementation guidance. The C# code serves as the authoritative reference for:
+**IMPORTANT**: Always refer to the original C# source code for implementation guidance. Workspace convention:
+- C# reference source: `~/github/oss/BDInfo-src/BDInfo.Core/BDCommon/rom/` (clone UniqProject/BDInfo if missing)
+
+The C# code serves as the authoritative reference for:
 - Binary format specifications
 - Parsing algorithms
 - Codec analysis logic
@@ -244,7 +247,7 @@ See [plan.md](plan.md) for detailed implementation plan and remaining work.
 - Patent-free codec documentation
 
 ## Development Workflow
-1. Always check original C# implementation in `BDInfo-master/`
+1. Always check original C# implementation in `~/github/oss/BDInfo-src/BDInfo.Core/BDCommon/rom/`
 2. Write tests before implementation
 3. Use standard Go conventions
 4. Document codec-specific quirks
@@ -257,6 +260,10 @@ Goal: 1:1 parity with official BDInfo report text. Loop-to-done: run parity chec
 ### Official Binary + Source
 - Official Linux BDInfo binary (workspace convention): `~/github/oss/bdinfo-official/bdinfo_linux_v2.0.5_extracted/BDInfo`
 - C# reference source: `~/github/oss/BDInfo-src/BDInfo.Core/BDCommon/rom/`
+
+### Output Quirks To Match (Gotchas)
+- Hidden-tracks note: official inserts `\\n\\r\\n` before `(*) Indicates included stream hidden by this playlist.` when `playlist.HasHiddenTracks` is true. See `internal/report/report.go`.
+- Chapter stats: official `Avg Frame Size` depends on per-transfer `StreamTag` from codec scan; do not default missing tags to `"I"`. Tag parse lives in `internal/bdrom/streamfile.go` (ported from `TSCodecAVC.cs`, `TSCodecMPEG2.cs`, `TSCodecVC1.cs`).
 
 ### Quick Manual Parity Check (Report Text)
 Sample disc (avoid full dataset sweeps; pick 1-2 discs): `/mnt/storage/torrents/Network.1976.1080p.USA.Blu-ray.AVC.LPCM.1.0-TMT`
@@ -289,14 +296,11 @@ go test ./internal/parity -run TestParity_OfficialBDInfo_ReportText -count=1
 ```
 
 ## C# Source Reference Structure
-The `BDInfo-master/` directory contains:
-- `BDCommon/rom/`: Core parsing logic
-  - `TSCodec*.cs`: Codec analyzers (AC3, DTS, AVC, HEVC, etc.)
+Repo: `~/github/oss/BDInfo-src/`
+- `BDInfo.Core/BDCommon/rom/`: Core parsing logic
+  - `TSCodec*.cs`: Codec analyzers (AC3, DTS, AVC, HEVC, MPEG2, VC-1, etc.)
   - `TSStreamFile.cs`: Transport stream parser
   - `TSPlaylistFile.cs`: MPLS playlist parser
   - `TSStreamClipFile.cs`: CLPI clip info parser
   - `BDROM.cs`: Main disc structure
   - `LanguageCodes.cs`: ISO 639-2 language mappings
-- `BDCommon/IO/`: File system abstractions
-- `BDExtractor/`: ISO extraction tool
-- `BDInfo/`: Main CLI application

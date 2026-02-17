@@ -88,6 +88,12 @@ type streamState struct {
 	lastDiff            int64
 	codecData           []byte
 	streamTag           string
+	tagParse            uint32
+	avcAUDParse         byte
+	vc1FrameHeaderParse byte
+	vc1SeqHeaderParse   byte
+	vc1IsInterlaced     bool
+	mpeg2PictureParse   byte
 	pesHeaderRemaining  int
 	pesHeaderExtraKnown bool
 	pesPacketRemaining  int
@@ -319,6 +325,105 @@ func (s *StreamFile) Scan(playlists []*PlaylistFile, full bool) error {
 		}
 		if known {
 			state.windowBytes += uint64(len(payload))
+		}
+		// Match BDInfo: capture per-transfer stream tag for chapter/frame stats.
+		// The tag is derived from the codec bitstream and can be empty when the scan
+		// does not encounter the expected marker in this transfer.
+		if state.collectDiagnostics && isVideo && state.streamTag == "" && len(payload) > 0 {
+			if vs, ok := st.(*stream.VideoStream); ok {
+				switch vs.StreamType {
+				case stream.StreamTypeAVCVideo:
+					for i := 0; i < len(payload) && state.streamTag == ""; i++ {
+						state.tagParse = (state.tagParse << 8) | uint32(payload[i])
+						if state.avcAUDParse > 0 {
+							state.avcAUDParse--
+							if state.avcAUDParse == 0 {
+								switch (state.tagParse & 0xFF) >> 5 {
+								case 0, 3, 5:
+									state.streamTag = "I"
+								case 1, 4, 6:
+									state.streamTag = "P"
+								case 2, 7:
+									state.streamTag = "B"
+								}
+							}
+							continue
+						}
+						if state.tagParse == 0x00000109 {
+							state.avcAUDParse = 1
+						}
+					}
+				case stream.StreamTypeMPEG2Video:
+					for i := 0; i < len(payload) && state.streamTag == ""; i++ {
+						state.tagParse = (state.tagParse << 8) | uint32(payload[i])
+						if state.tagParse == 0x00000100 {
+							state.mpeg2PictureParse = 2
+							continue
+						}
+						if state.mpeg2PictureParse > 0 {
+							state.mpeg2PictureParse--
+							if state.mpeg2PictureParse == 0 {
+								switch (state.tagParse & 0x38) >> 3 {
+								case 1:
+									state.streamTag = "I"
+								case 2:
+									state.streamTag = "P"
+								case 3:
+									state.streamTag = "B"
+								}
+							}
+						}
+					}
+				case stream.StreamTypeVC1Video:
+					for i := 0; i < len(payload) && state.streamTag == ""; i++ {
+						state.tagParse = (state.tagParse << 8) | uint32(payload[i])
+						if state.tagParse == 0x0000010D {
+							state.vc1FrameHeaderParse = 4
+							continue
+						}
+						if state.vc1FrameHeaderParse > 0 {
+							state.vc1FrameHeaderParse--
+							if state.vc1FrameHeaderParse == 0 {
+								parse := state.tagParse
+								var pictureType uint32
+								if state.vc1IsInterlaced {
+									if (parse & 0x80000000) == 0 {
+										pictureType = (parse & 0x78000000) >> 13
+									} else {
+										pictureType = (parse & 0x3c000000) >> 12
+									}
+								} else {
+									pictureType = (parse & 0xf0000000) >> 14
+								}
+								switch {
+								case (pictureType & 0x20000) == 0:
+									state.streamTag = "P"
+								case (pictureType & 0x10000) == 0:
+									state.streamTag = "B"
+								case (pictureType & 0x8000) == 0:
+									state.streamTag = "I"
+								case (pictureType & 0x4000) == 0:
+									state.streamTag = "BI"
+								default:
+									// Leave empty (null in the official output).
+									state.streamTag = ""
+								}
+							}
+							continue
+						}
+						if state.tagParse == 0x0000010F {
+							state.vc1SeqHeaderParse = 6
+							continue
+						}
+						if state.vc1SeqHeaderParse > 0 {
+							state.vc1SeqHeaderParse--
+							if state.vc1SeqHeaderParse == 0 {
+								state.vc1IsInterlaced = (state.tagParse&0x40)>>6 > 0
+							}
+						}
+					}
+				}
+			}
 		}
 		if state.pesPacketRemaining > 0 {
 			state.pesPacketRemaining -= len(payload)
@@ -572,9 +677,6 @@ func (s *StreamFile) updateStreamBitrate(playlists []*PlaylistFile, pid uint16, 
 		streamInfo.Base().PacketCount += state.windowPackets
 		if streamInfo.Base().IsVideoStream() {
 			if state.collectDiagnostics {
-				if state.streamTag == "" {
-					state.streamTag = "I"
-				}
 				streamInfo.Base().PacketSeconds += streamInterval
 				s.StreamDiagnostics[pid] = append(s.StreamDiagnostics[pid], StreamDiagnostics{
 					Marker:   streamTime,
@@ -583,6 +685,14 @@ func (s *StreamFile) updateStreamBitrate(playlists []*PlaylistFile, pid uint16, 
 					Packets:  state.windowPackets,
 					Tag:      state.streamTag,
 				})
+				// Match BDInfo: tag parsing state resets per transfer.
+				state.streamTag = ""
+				state.tagParse = 0
+				state.avcAUDParse = 0
+				state.vc1FrameHeaderParse = 0
+				state.vc1SeqHeaderParse = 0
+				state.vc1IsInterlaced = false
+				state.mpeg2PictureParse = 0
 			} else {
 				streamInfo.Base().PacketSeconds += streamInterval
 			}

@@ -217,7 +217,9 @@ func WriteReport(path string, bd *bdrom.BDROM, playlists []*bdrom.PlaylistFile, 
 		fmt.Fprintf(&b, "%-24s%s Mbps\n", "Total Bitrate:", totalBitrate)
 
 		if playlist.HasHiddenTracks {
-			b.WriteString("\n(*) Indicates included stream hidden by this playlist.\n")
+			// Match official BDInfo: it inserts a CRLF line-break before the hidden-tracks note.
+			// The surrounding report uses LF; this specific CRLF is a quirk in the official output.
+			b.WriteString("\r\n(*) Indicates included stream hidden by this playlist.\n")
 		}
 
 		if len(playlist.VideoStreams) > 0 {
@@ -363,8 +365,8 @@ func WriteReport(path string, bd *bdrom.BDROM, playlists []*bdrom.PlaylistFile, 
 			b.WriteString("\n\nSTREAM DIAGNOSTICS:\n\n\n")
 			fmt.Fprintf(&b, "%-16s%-16s%-16s%-16s%-24s%-24s%-24s%-16s%-16s\n",
 				"File", "PID", "Type", "Codec", "Language", "Seconds", "Bitrate", "Bytes", "Packets")
-				fmt.Fprintf(&b, "%-16s%-16s%-16s%-16s%-24s%-24s%-24s%-16s%-16s\n",
-					"----", "---", "----", "-----", "--------", "--------------", "--------------", "-------------", "-----")
+			fmt.Fprintf(&b, "%-16s%-16s%-16s%-16s%-24s%-24s%-24s%-16s%-16s\n",
+				"----", "---", "----", "-----", "--------", "--------------", "--------------", "-------------", "-----")
 
 			reported := map[string]bool{}
 			for _, clip := range playlist.StreamClips {
@@ -380,55 +382,67 @@ func WriteReport(path string, bd *bdrom.BDROM, playlists []*bdrom.PlaylistFile, 
 				if clip.AngleIndex > 0 {
 					clipName = fmt.Sprintf("%s (%d)", clipName, clip.AngleIndex)
 				}
-					// Match BDInfo: stable stream order (avoid Go map iteration nondeterminism).
-					seenPIDs := map[uint16]bool{}
-					for _, playlistStream := range playlist.SortedStreams {
-						if playlistStream == nil {
-							continue
-						}
-						if playlistStream.Base().AngleIndex > 0 {
-							// BDInfo doesn't emit per-angle duplicate rows.
-							continue
-						}
-						pid := playlistStream.Base().PID
-						if seenPIDs[pid] {
-							continue
-						}
-						seenPIDs[pid] = true
 
-						clipStream := clip.StreamFile.Streams[pid]
-						if clipStream == nil {
-							continue
+				// Match official BDInfo: order rows by stream kind (video, audio, graphics, text) then PID.
+				// Do not use playlist.SortedStreams here; BDInfo's diagnostics ordering differs from its stream listing sort.
+				pids := make([]uint16, 0, len(clip.StreamFile.Streams))
+				for pid, clipStream := range clip.StreamFile.Streams {
+					if clipStream == nil {
+						continue
+					}
+					if _, ok := playlist.Streams[pid]; !ok {
+						continue
+					}
+					pids = append(pids, pid)
+				}
+				sort.Slice(pids, func(i, j int) bool {
+					a := clip.StreamFile.Streams[pids[i]]
+					bs := clip.StreamFile.Streams[pids[j]]
+					kind := func(info stream.Info) int {
+						if info == nil {
+							return 9
 						}
-						if _, ok := playlist.Streams[pid]; !ok {
-							continue
+						base := info.Base()
+						switch {
+						case base.IsVideoStream():
+							return 0
+						case base.IsAudioStream():
+							return 1
+						case base.IsGraphicsStream():
+							return 2
+						case base.IsTextStream():
+							return 3
+						default:
+							return 4
 						}
+					}
+					ka := kind(a)
+					kb := kind(bs)
+					if ka != kb {
+						return ka < kb
+					}
+					return pids[i] < pids[j]
+				})
 
-						clipSeconds := "0"
-						clipBitRate := "0"
-						if clip.StreamFile.Length > 0 {
-							seconds := clip.StreamFile.Length
+				for _, pid := range pids {
+					clipStream := clip.StreamFile.Streams[pid]
+					if clipStream == nil {
+						continue
+					}
 
-							// BDInfo's TSStreamFile.Length is DTS-based and tends to be ~1 frame shorter than MPLS TimeOut-TimeIn.
-							// If we only have the MPLS-derived duration for this clip, adjust for parity.
-							frameDur := 0.0
-							if len(playlist.VideoStreams) > 0 {
-								vs := playlist.VideoStreams[0]
-								if vs != nil && vs.FrameRateEnum > 0 && vs.FrameRateDen > 0 {
-									frameDur = float64(vs.FrameRateDen) / float64(vs.FrameRateEnum)
-								}
-							}
-							if frameDur > 0 && clip.Length > 0 && math.Abs(seconds-clip.Length) < 0.01 && seconds > frameDur {
-								seconds -= frameDur
-							}
-
-							clipSeconds = fmt.Sprintf("%.3f", seconds)
-							clipBitRate = util.FormatNumber(int64(math.RoundToEven(float64(clipStream.Base().PayloadBytes) * 8 / seconds / 1000)))
-						}
+					clipSeconds := "0"
+					clipBitRate := "0"
+					if clip.StreamFile.Length > 0 {
+						seconds := clip.StreamFile.Length
+						clipSeconds = fmt.Sprintf("%.3f", seconds)
+						clipBitRate = util.FormatNumber(int64(math.RoundToEven(float64(clipStream.Base().PayloadBytes) * 8 / seconds / 1000)))
+					}
 
 					language := ""
-					if code := playlistStream.Base().LanguageCode(); code != "" {
-						language = fmt.Sprintf("%s (%s)", code, playlistStream.Base().LanguageName)
+					if playlistStream := playlist.Streams[pid]; playlistStream != nil {
+						if code := playlistStream.Base().LanguageCode(); code != "" {
+							language = fmt.Sprintf("%s (%s)", code, playlistStream.Base().LanguageName)
+						}
 					}
 
 					fmt.Fprintf(&b, "%-16s%-16s%-16s%-16s%-24s%-24s%-24s%-16s%-16s\n",

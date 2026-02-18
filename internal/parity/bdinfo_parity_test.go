@@ -5,8 +5,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/autobrr/go-bdinfo/internal/settings"
 )
 
 func TestParity_OfficialBDInfo_ReportText(t *testing.T) {
@@ -45,6 +48,10 @@ func TestParity_OfficialBDInfo_ReportText(t *testing.T) {
 	// internal/parity -> repo root
 	repoRoot = filepath.Clean(filepath.Join(repoRoot, "../.."))
 
+	// Single source of truth for "defaults": our settings.Default. Force both binaries to
+	// these toggles so the comparison stays stable as defaults evolve.
+	def := settings.Default(repoRoot)
+
 	tmp := t.TempDir()
 	officialOut := filepath.Join(tmp, "official.txt")
 	oursOut := filepath.Join(tmp, "ours.txt")
@@ -67,16 +74,16 @@ func TestParity_OfficialBDInfo_ReportText(t *testing.T) {
 			"-p", disc,
 			"-o", officialOut,
 			// Stabilize toggles: match go-bdinfo defaults.
-			"-b", "true",
-			"-y", "true",
-			"-v", "20",
-			"-l", "false",
-			"-k", "false",
-			"-g", "false",
-			"-e", "false",
-			"-j", "false",
-			"-m", "true",
-			"-q", "true",
+			"-b", strconv.FormatBool(def.EnableSSIF),
+			"-y", strconv.FormatBool(def.FilterShortPlaylists),
+			"-v", strconv.Itoa(def.FilterShortPlaylistsVal),
+			"-l", strconv.FormatBool(def.FilterLoopingPlaylists),
+			"-k", strconv.FormatBool(def.KeepStreamOrder),
+			"-g", strconv.FormatBool(def.GenerateStreamDiagnostics),
+			"-e", strconv.FormatBool(def.ExtendedStreamDiagnostics),
+			"-j", strconv.FormatBool(def.GroupByTime),
+			"-m", strconv.FormatBool(def.GenerateTextSummary),
+			"-q", strconv.FormatBool(def.IncludeVersionAndNotes),
 		}
 		if err := runCmd(t, "", official, offArgs...); err != nil {
 			t.Fatalf("official failed: %v", err)
@@ -97,16 +104,16 @@ func TestParity_OfficialBDInfo_ReportText(t *testing.T) {
 	oursArgs := []string{
 		"-p", disc,
 		"-o", oursOut,
-		"--enablessif=true",
-		"--filtershortplaylist=true",
-		"--filtershortplaylistvalue=20",
-		"--filterloopingplaylists=false",
-		"--keepstreamorder=false",
-		"--generatestreamdiagnostics=false",
-		"--extendedstreamdiagnostics=false",
-		"--groupbytime=false",
-		"--generatetextsummary=true",
-		"--includeversionandnotes=true",
+		"--enablessif=" + strconv.FormatBool(def.EnableSSIF),
+		"--filtershortplaylist=" + strconv.FormatBool(def.FilterShortPlaylists),
+		"--filtershortplaylistvalue=" + strconv.Itoa(def.FilterShortPlaylistsVal),
+		"--filterloopingplaylists=" + strconv.FormatBool(def.FilterLoopingPlaylists),
+		"--keepstreamorder=" + strconv.FormatBool(def.KeepStreamOrder),
+		"--generatestreamdiagnostics=" + strconv.FormatBool(def.GenerateStreamDiagnostics),
+		"--extendedstreamdiagnostics=" + strconv.FormatBool(def.ExtendedStreamDiagnostics),
+		"--groupbytime=" + strconv.FormatBool(def.GroupByTime),
+		"--generatetextsummary=" + strconv.FormatBool(def.GenerateTextSummary),
+		"--includeversionandnotes=" + strconv.FormatBool(def.IncludeVersionAndNotes),
 	}
 	if err := runCmd(t, "", oursBin, oursArgs...); err != nil {
 		t.Fatalf("ours failed: %v", err)

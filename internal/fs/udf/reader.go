@@ -461,14 +461,14 @@ func (r *Reader) parsePartitionMaps(pm []byte, n uint32) error {
 		}
 	}
 
-		if r.metadataFileICB != nil && r.file != nil {
-			if _, err := r.metadataFileAllocationDescriptors(); err != nil {
-				return err
-			}
+	if r.metadataFileICB != nil && r.file != nil {
+		if _, err := r.metadataFileAllocationDescriptors(); err != nil {
+			return err
 		}
-
-		return nil
 	}
+
+	return nil
+}
 
 func (r *Reader) resolvePartitionBlock(partRef uint16, lbn uint32) (uint32, error) {
 	return r.resolveLBAddr(LBAddr{

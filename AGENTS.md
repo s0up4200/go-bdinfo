@@ -6,6 +6,28 @@ This project is a Go implementation of BDInfo, a tool for analyzing Blu-ray disc
 **IMPORTANT**: Always refer to the original C# source code for implementation guidance. Workspace convention:
 - C# reference source: `~/github/oss/BDInfo-src/BDInfo.Core/BDCommon/rom/` (clone UniqProject/BDInfo if missing)
 
+## Parity Loop (Official BDInfo)
+Loop-to-done: generate official report + our report for the same disc path (folder or ISO), `diff -u --text`, fix mismatches, add regression tests.
+
+Commands:
+```bash
+off=~/github/oss/bdinfo-official/bdinfo_linux_v2.0.5_extracted/BDInfo
+disc="/mnt/storage/torrents/<disc-folder-or-iso>"
+out=/tmp/bdinfo-parity
+mkdir -p "$out"
+
+"$off" -p "$disc" -o "$out/official.txt"
+go build -o /tmp/bdinfo ./cmd/bdinfo
+/tmp/bdinfo -p "$disc" -o "$out/ours.txt"
+
+diff -u --text "$out/official.txt" "$out/ours.txt"
+```
+
+Notes:
+- IO: don’t sweep all of `/mnt/storage/torrents*`; sample a few discs per type.
+- ISO/UDF: BD-ROM ISOs commonly use a metadata partition map and multi-extent files; UDF reads must be concurrency-safe (use `ReadAt`-based access, no shared `Seek`).
+- Debug helper: `go run ./cmd/debugudf -iso "<path>.iso"` (lists key dirs/files, sanity-checks headers/sizes).
+
 The C# code serves as the authoritative reference for:
 - Binary format specifications
 - Parsing algorithms

@@ -28,6 +28,7 @@ Notes:
 - ISO/UDF: BD-ROM ISOs commonly use a metadata partition map and multi-extent files; UDF reads must be concurrency-safe (use `ReadAt`-based access, no shared `Seek`).
 - Speed loop: always measure official vs ours on the same sample path and compare wall time with exact command logs.
 - Current perf policy: stream scans default to 1 worker (override with `BDINFO_WORKERS`) to avoid seek thrash on this storage profile.
+- Harness: `scripts/speed_parity_loop.sh --disc "<disc-or-iso>" --reps 3` (matched toggles, per-rep parity check, median ratio).
 - Debug helper: `go run ./cmd/debugudf -iso "<path>.iso"` (lists key dirs/files, sanity-checks headers/sizes).
 
 The C# code serves as the authoritative reference for:

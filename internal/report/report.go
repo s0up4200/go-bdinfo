@@ -382,10 +382,11 @@ func WriteReport(path string, bd *bdrom.BDROM, playlists []*bdrom.PlaylistFile, 
 					clipName = fmt.Sprintf("%s (%d)", clipName, clip.AngleIndex)
 				}
 
-				// Match official BDInfo: diagnostics iterate stream dictionary values in insertion order.
-				// StreamOrder mirrors CLPI insertion order; fallback keeps deterministic grouped ordering.
+				// Match official BDInfo ordering: when stream insertion order is known, use it directly.
+				// Fallback to deterministic kind/PID ordering.
 				pids := make([]uint16, 0, len(clip.StreamFile.Streams))
-				if len(clip.StreamFile.StreamOrder) > 0 {
+				hasStreamOrder := len(clip.StreamFile.StreamOrder) > 0
+				if hasStreamOrder {
 					for _, pid := range clip.StreamFile.StreamOrder {
 						clipStream := clip.StreamFile.Streams[pid]
 						if clipStream == nil {
@@ -406,73 +407,38 @@ func WriteReport(path string, bd *bdrom.BDROM, playlists []*bdrom.PlaylistFile, 
 						}
 						pids = append(pids, pid)
 					}
+				}
+				streamWeight := func(pid uint16) int {
+					if playlistStream := playlist.Streams[pid]; playlistStream != nil {
+						base := playlistStream.Base()
+						if base.IsVideoStream() && base.IsHidden {
+							return 5
+						}
+					}
+					info := clip.StreamFile.Streams[pid]
+					if info == nil {
+						return 9
+					}
+					base := info.Base()
+					switch {
+					case base.IsVideoStream():
+						return 0
+					case base.IsAudioStream():
+						return 1
+					case base.IsGraphicsStream():
+						return 2
+					case base.IsTextStream():
+						return 3
+					default:
+						return 4
+					}
+				}
+				if !hasStreamOrder {
 					sort.Slice(pids, func(i, j int) bool {
-						a := clip.StreamFile.Streams[pids[i]]
-						bs := clip.StreamFile.Streams[pids[j]]
-						kind := func(info stream.Info) int {
-							if info == nil {
-								return 9
-							}
-							base := info.Base()
-							switch {
-							case base.IsVideoStream():
-								return 0
-							case base.IsAudioStream():
-								return 1
-							case base.IsGraphicsStream():
-								return 2
-							case base.IsTextStream():
-								return 3
-							default:
-								return 4
-							}
-						}
-						ka := kind(a)
-						kb := kind(bs)
-						if ka != kb {
-							return ka < kb
-						}
-						return pids[i] < pids[j]
-					})
-				}
-				hasHiddenVideo := false
-				for _, pid := range pids {
-					playlistStream := playlist.Streams[pid]
-					if playlistStream == nil {
-						continue
-					}
-					base := playlistStream.Base()
-					if base.IsVideoStream() && base.IsHidden {
-						hasHiddenVideo = true
-						break
-					}
-				}
-				if !hasHiddenVideo {
-					sort.SliceStable(pids, func(i, j int) bool {
-						a := clip.StreamFile.Streams[pids[i]]
-						bs := clip.StreamFile.Streams[pids[j]]
-						kind := func(info stream.Info) int {
-							if info == nil {
-								return 9
-							}
-							base := info.Base()
-							switch {
-							case base.IsVideoStream():
-								return 0
-							case base.IsAudioStream():
-								return 1
-							case base.IsGraphicsStream():
-								return 2
-							case base.IsTextStream():
-								return 3
-							default:
-								return 4
-							}
-						}
-						ka := kind(a)
-						kb := kind(bs)
-						if ka != kb {
-							return ka < kb
+						wi := streamWeight(pids[i])
+						wj := streamWeight(pids[j])
+						if wi != wj {
+							return wi < wj
 						}
 						return pids[i] < pids[j]
 					})

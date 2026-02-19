@@ -127,35 +127,203 @@ func parsePATPMTPIDSection(section []byte) (uint16, bool) {
 	return 0, false
 }
 
-func parsePMTStreamOrderSection(section []byte) ([]uint16, bool) {
-	if len(section) < 16 {
+func detectPMTStreamOrder(fileInfo fs.FileInfo) ([]uint16, bool) {
+	if fileInfo == nil {
 		return nil, false
 	}
-	if section[0] != 0x02 {
+	f, err := fileInfo.OpenRead()
+	if err != nil {
 		return nil, false
 	}
-	sectionLen := int(section[1]&0x0F)<<8 | int(section[2])
-	total := 3 + sectionLen
-	if total > len(section) || total < 16 {
+	defer f.Close()
+
+	first := make([]byte, 192)
+	if _, err := io.ReadFull(f, first); err != nil {
 		return nil, false
 	}
-	programInfoLen := int(section[10]&0x0F)<<8 | int(section[11])
-	idx := 12 + programInfoLen
-	end := total - 4 // exclude CRC32
-	if idx > end {
+
+	packetSize := 192
+	syncOffset := 4
+	if first[0] == 0x47 {
+		packetSize = 188
+		syncOffset = 0
+	} else if first[4] == 0x47 {
+		packetSize = 192
+		syncOffset = 4
+	} else {
+		return nil, false
+	}
+
+	chunkSize := 5 * 1024 * 1024
+	chunkSize -= chunkSize % packetSize
+	if chunkSize < packetSize {
+		chunkSize = packetSize
+	}
+	buf := make([]byte, chunkSize+packetSize)
+	carryLen := len(first) - packetSize
+	if carryLen > 0 {
+		copy(buf, first[packetSize:])
+	}
+
+	pmtPID := uint16(0xFFFF)
+	var patAssembler psiAssembler
+	var pmtAssembler psiAssembler
+	pmtSections := make(map[byte][]pmtStreamEntry)
+	pmtLastSection := byte(0xFF)
+
+	consumePMTSection := func(section []byte) {
+		sectionNumber, lastSectionNumber, entries, ok := parsePMTSection(section)
+		if !ok {
+			return
+		}
+		if pmtLastSection == 0xFF {
+			pmtLastSection = lastSectionNumber
+		}
+		if _, exists := pmtSections[sectionNumber]; !exists {
+			pmtSections[sectionNumber] = entries
+		}
+	}
+	processPacket := func(pkt []byte) {
+		if len(pkt) <= syncOffset || pkt[syncOffset] != 0x47 {
+			return
+		}
+		pid := (uint16(pkt[syncOffset+1]&0x1F) << 8) | uint16(pkt[syncOffset+2])
+		adaptation := (pkt[syncOffset+3] >> 4) & 0x3
+		if adaptation == 0 || adaptation == 2 {
+			return
+		}
+		idx := syncOffset + 4
+		if adaptation == 3 {
+			if idx >= len(pkt) {
+				return
+			}
+			idx += 1 + int(pkt[idx])
+		}
+		if idx >= len(pkt) {
+			return
+		}
+		payload := pkt[idx:]
+		if len(payload) == 0 {
+			return
+		}
+		payloadStart := (pkt[syncOffset+1] & 0x40) != 0
+		if payloadStart {
+			if pid == 0 {
+				if section, ok := patAssembler.appendPayload(payload, true); ok {
+					if discoveredPMTPID, ok := parsePATPMTPIDSection(section); ok {
+						pmtPID = discoveredPMTPID
+					}
+				}
+			} else if pid == pmtPID {
+				if section, ok := pmtAssembler.appendPayload(payload, true); ok {
+					consumePMTSection(section)
+				}
+			}
+		} else if pid == 0 {
+			if section, ok := patAssembler.appendPayload(payload, false); ok {
+				if discoveredPMTPID, ok := parsePATPMTPIDSection(section); ok {
+					pmtPID = discoveredPMTPID
+				}
+			}
+		} else if pid == pmtPID {
+			if section, ok := pmtAssembler.appendPayload(payload, false); ok {
+				consumePMTSection(section)
+			}
+		}
+	}
+
+	// First packet already read.
+	processPacket(first[:packetSize])
+
+	readCount := 0
+	for {
+		n, err := f.Read(buf[carryLen : carryLen+chunkSize])
+		if n == 0 && err != nil {
+			break
+		}
+		n += carryLen
+		aligned := n - (n % packetSize)
+		for i := 0; i+packetSize <= aligned; i += packetSize {
+			processPacket(buf[i : i+packetSize])
+		}
+		carryLen = n - aligned
+		if carryLen > 0 {
+			copy(buf, buf[aligned:n])
+		}
+		readCount++
+		if pmtLastSection != 0xFF && len(pmtSections) >= int(pmtLastSection)+1 {
+			break
+		}
+		// PMT appears near the start; avoid scanning large portions when probing.
+		if readCount >= 32 {
+			break
+		}
+		if err != nil {
+			break
+		}
+	}
+
+	if pmtLastSection == 0xFF || len(pmtSections) < int(pmtLastSection)+1 {
 		return nil, false
 	}
 	order := make([]uint16, 0, 8)
-	for idx+5 <= end {
-		pid := uint16(section[idx+1]&0x1F)<<8 | uint16(section[idx+2])
-		esInfoLen := int(section[idx+3]&0x0F)<<8 | int(section[idx+4])
-		order = append(order, pid)
-		idx += 5 + esInfoLen
+	seen := make(map[uint16]struct{}, 8)
+	for sec := byte(0); sec <= pmtLastSection; sec++ {
+		entries, ok := pmtSections[sec]
+		if !ok {
+			return nil, false
+		}
+		for _, entry := range entries {
+			if _, exists := seen[entry.PID]; exists {
+				continue
+			}
+			seen[entry.PID] = struct{}{}
+			order = append(order, entry.PID)
+		}
 	}
 	if len(order) == 0 {
 		return nil, false
 	}
 	return order, true
+}
+
+type pmtStreamEntry struct {
+	PID        uint16
+	StreamType byte
+}
+
+func parsePMTSection(section []byte) (sectionNumber byte, lastSectionNumber byte, entries []pmtStreamEntry, ok bool) {
+	if len(section) < 16 {
+		return 0, 0, nil, false
+	}
+	if section[0] != 0x02 {
+		return 0, 0, nil, false
+	}
+	sectionLen := int(section[1]&0x0F)<<8 | int(section[2])
+	total := 3 + sectionLen
+	if total > len(section) || total < 16 {
+		return 0, 0, nil, false
+	}
+	sectionNumber = section[6]
+	lastSectionNumber = section[7]
+	programInfoLen := int(section[10]&0x0F)<<8 | int(section[11])
+	idx := 12 + programInfoLen
+	end := total - 4 // exclude CRC32
+	if idx > end {
+		return 0, 0, nil, false
+	}
+	entries = make([]pmtStreamEntry, 0, 8)
+	for idx+5 <= end {
+		streamType := section[idx]
+		pid := uint16(section[idx+1]&0x1F)<<8 | uint16(section[idx+2])
+		esInfoLen := int(section[idx+3]&0x0F)<<8 | int(section[idx+4])
+		entries = append(entries, pmtStreamEntry{PID: pid, StreamType: streamType})
+		idx += 5 + esInfoLen
+	}
+	if len(entries) == 0 {
+		return 0, 0, nil, false
+	}
+	return sectionNumber, lastSectionNumber, entries, true
 }
 
 type InterleavedFile struct {
@@ -419,6 +587,7 @@ func (s *StreamFile) Scan(playlists []*PlaylistFile, full bool) error {
 	if fileInfo == nil {
 		return fmt.Errorf("missing stream file info")
 	}
+	initialPMTOrder, _ := detectPMTStreamOrder(fileInfo)
 
 	f, err := fileInfo.OpenRead()
 	if err != nil {
@@ -477,10 +646,7 @@ func (s *StreamFile) Scan(playlists []*PlaylistFile, full bool) error {
 	var unknownState *streamState
 	seenStreamOrder := make(map[uint16]struct{}, len(s.Streams))
 	scanStreamOrder := make([]uint16, 0, len(s.Streams))
-	pmtPID := uint16(0xFFFF)
-	var pmtStreamOrder []uint16
-	var patAssembler psiAssembler
-	var pmtAssembler psiAssembler
+	pmtStreamOrder := append([]uint16(nil), initialPMTOrder...)
 	defer func() {
 		for _, state := range states {
 			if state == nil || state.codecData == nil {
@@ -547,33 +713,6 @@ func (s *StreamFile) Scan(playlists []*PlaylistFile, full bool) error {
 		payload := pkt[idx:]
 		if len(payload) == 0 {
 			return
-		}
-		if payloadStart {
-			if pid == 0 {
-				if section, ok := patAssembler.appendPayload(payload, true); ok {
-					if discoveredPMTPID, ok := parsePATPMTPIDSection(section); ok {
-						pmtPID = discoveredPMTPID
-					}
-				}
-			} else if pid == pmtPID && len(pmtStreamOrder) == 0 {
-				if section, ok := pmtAssembler.appendPayload(payload, true); ok {
-					if order, ok := parsePMTStreamOrderSection(section); ok {
-						pmtStreamOrder = order
-					}
-				}
-			}
-		} else if pid == 0 {
-			if section, ok := patAssembler.appendPayload(payload, false); ok {
-				if discoveredPMTPID, ok := parsePATPMTPIDSection(section); ok {
-					pmtPID = discoveredPMTPID
-				}
-			}
-		} else if pid == pmtPID && len(pmtStreamOrder) == 0 {
-			if section, ok := pmtAssembler.appendPayload(payload, false); ok {
-				if order, ok := parsePMTStreamOrderSection(section); ok {
-					pmtStreamOrder = order
-				}
-			}
 		}
 		// Payload unit start is a hint; validate PES start code to avoid false starts (BDInfo scans for 0x000001).
 		isPESStart := payloadStart && len(payload) >= 4 && payload[0] == 0x00 && payload[1] == 0x00 && payload[2] == 0x01
@@ -913,8 +1052,13 @@ func (s *StreamFile) Scan(playlists []*PlaylistFile, full bool) error {
 	}
 
 	s.finalizePlaylistVBR(playlists)
-	if len(pmtStreamOrder) > 0 || len(scanStreamOrder) > 0 {
-		s.StreamOrder = s.StreamOrder[:0]
+	if len(pmtStreamOrder) == 0 {
+		if detectedOrder, ok := detectPMTStreamOrder(fileInfo); ok {
+			pmtStreamOrder = detectedOrder
+		}
+	}
+	if len(s.StreamOrder) > 0 || len(scanStreamOrder) > 0 || len(pmtStreamOrder) > 0 {
+		order := make([]uint16, 0, len(s.Streams))
 		seen := make(map[uint16]struct{}, len(s.Streams))
 		appendIfKnown := func(pid uint16) {
 			if _, ok := s.Streams[pid]; !ok {
@@ -924,24 +1068,31 @@ func (s *StreamFile) Scan(playlists []*PlaylistFile, full bool) error {
 				return
 			}
 			seen[pid] = struct{}{}
-			s.StreamOrder = append(s.StreamOrder, pid)
+			order = append(order, pid)
 		}
+		// Prefer PMT-declared stream order (official BDInfo creates streams from PMT parsing).
 		for _, pid := range pmtStreamOrder {
 			appendIfKnown(pid)
 		}
+		// Then use observed scan order for any streams not present in PMT.
 		for _, pid := range scanStreamOrder {
 			appendIfKnown(pid)
 		}
-		if len(s.StreamOrder) < len(s.Streams) {
-			remaining := make([]uint16, 0, len(s.Streams)-len(s.StreamOrder))
+		// CLPI order is fallback when PMT/scan did not cover all streams.
+		for _, pid := range s.StreamOrder {
+			appendIfKnown(pid)
+		}
+		if len(order) < len(s.Streams) {
+			remaining := make([]uint16, 0, len(s.Streams)-len(order))
 			for pid := range s.Streams {
 				if _, ok := seen[pid]; !ok {
 					remaining = append(remaining, pid)
 				}
 			}
 			sort.Slice(remaining, func(i, j int) bool { return remaining[i] < remaining[j] })
-			s.StreamOrder = append(s.StreamOrder, remaining...)
+			order = append(order, remaining...)
 		}
+		s.StreamOrder = order
 	}
 
 	return nil

@@ -397,6 +397,12 @@ func WriteReport(path string, bd *bdrom.BDROM, playlists []*bdrom.PlaylistFile, 
 				sort.Slice(pids, func(i, j int) bool {
 					a := clip.StreamFile.Streams[pids[i]]
 					bs := clip.StreamFile.Streams[pids[j]]
+					hidden := func(pid uint16, info stream.Info) bool {
+						if playlistInfo := playlist.Streams[pid]; playlistInfo != nil {
+							return playlistInfo.Base().IsHidden
+						}
+						return info != nil && info.Base().IsHidden
+					}
 					kind := func(info stream.Info) int {
 						if info == nil {
 							return 9
@@ -417,6 +423,16 @@ func WriteReport(path string, bd *bdrom.BDROM, playlists []*bdrom.PlaylistFile, 
 					}
 					ka := kind(a)
 					kb := kind(bs)
+					ha := hidden(pids[i], a)
+					hb := hidden(pids[j], bs)
+					if ha && ka == 0 {
+						// Match BDInfo behavior observed on UHD Dolby Vision enhancement streams:
+						// hidden video streams are listed after non-hidden streams.
+						ka = 5
+					}
+					if hb && kb == 0 {
+						kb = 5
+					}
 					if ka != kb {
 						return ka < kb
 					}

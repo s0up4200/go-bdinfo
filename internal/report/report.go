@@ -25,10 +25,15 @@ func WriteReport(path string, bd *bdrom.BDROM, playlists []*bdrom.PlaylistFile, 
 	} else if regexp.MustCompile(`\{\d+\}`).MatchString(reportName) {
 		reportName = fmt.Sprintf(reportName, bd.VolumeLabel)
 	}
-	if reportName != "-" && filepath.Ext(reportName) == "" {
-		// Match BDInfo: default extension.
-		reportName = reportName + ".bdinfo"
+
+	if reportName != "-" {
+		ext := filepath.Ext(reportName)
+		if ext == "" {
+			// No extension provided - default to .txt
+			reportName = reportName + ".txt"
+		}
 	}
+
 	if path != "" {
 		reportName = path
 	}

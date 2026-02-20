@@ -27,12 +27,9 @@ func WriteReport(path string, bd *bdrom.BDROM, playlists []*bdrom.PlaylistFile, 
 	}
 
 	if reportName != "-" {
-		// Check if reportName ends with a known file extension
 		ext := filepath.Ext(reportName)
-		isKnownExt := ext == ".bdinfo" || ext == ".txt" || ext == ".json" || ext == ".csv" || ext == ".xml"
-
-		if ext == "" || !isKnownExt {
-			// No extension or unknown extension - add .txt as default
+		if ext == "" {
+			// No extension provided - default to .txt
 			reportName = reportName + ".txt"
 		}
 	}

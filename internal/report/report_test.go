@@ -127,3 +127,44 @@ func TestWriteReport_StreamDiagnosticsHiddenStreamsLast(t *testing.T) {
 		t.Fatalf("unexpected diagnostics ordering: primary=%d audio=%d graphics=%d hidden=%d", iPrimary, iAudio, iGraphics, iHidden)
 	}
 }
+
+func TestWriteReport_ReportFileNameExtensionHandling(t *testing.T) {
+	tmpDir := t.TempDir()
+	bd := &bdrom.BDROM{
+		VolumeLabel: "TEST_DISC",
+		Size:        123456789,
+	}
+
+	t.Run("preserves custom extension", func(t *testing.T) {
+		cfg := settings.Default(tmpDir)
+		cfg.ReportFileName = filepath.Join(tmpDir, "report.log")
+
+		reportPath, err := WriteReport("", bd, nil, bdrom.ScanResult{}, cfg)
+		if err != nil {
+			t.Fatalf("WriteReport() error = %v", err)
+		}
+		if reportPath != cfg.ReportFileName {
+			t.Fatalf("report path mismatch: got %q want %q", reportPath, cfg.ReportFileName)
+		}
+		if _, err := os.Stat(cfg.ReportFileName); err != nil {
+			t.Fatalf("expected report file to exist at custom extension path: %v", err)
+		}
+	})
+
+	t.Run("defaults to txt when extension missing", func(t *testing.T) {
+		cfg := settings.Default(tmpDir)
+		cfg.ReportFileName = filepath.Join(tmpDir, "report")
+		expected := cfg.ReportFileName + ".txt"
+
+		reportPath, err := WriteReport("", bd, nil, bdrom.ScanResult{}, cfg)
+		if err != nil {
+			t.Fatalf("WriteReport() error = %v", err)
+		}
+		if reportPath != expected {
+			t.Fatalf("report path mismatch: got %q want %q", reportPath, expected)
+		}
+		if _, err := os.Stat(expected); err != nil {
+			t.Fatalf("expected report file to exist at default txt path: %v", err)
+		}
+	})
+}

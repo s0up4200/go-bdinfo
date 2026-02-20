@@ -560,7 +560,13 @@ func (p *PlaylistFile) loadStreamClips() {
 	p.TextStreams = p.TextStreams[:0]
 	p.SortedStreams = p.SortedStreams[:0]
 
-	for _, streamInfo := range p.Streams {
+	pids := make([]int, 0, len(p.Streams))
+	for pid := range p.Streams {
+		pids = append(pids, int(pid))
+	}
+	sort.Ints(pids)
+	for _, pid := range pids {
+		streamInfo := p.Streams[uint16(pid)]
 		switch st := streamInfo.(type) {
 		case *stream.VideoStream:
 			p.VideoStreams = append(p.VideoStreams, st)
@@ -742,12 +748,19 @@ func compareAudioStreams(x, y *stream.AudioStream) int {
 	if sortY > sortX {
 		return 1
 	}
-	xEng := x.LanguageCode() == "eng"
-	yEng := y.LanguageCode() == "eng"
-	if xEng && !yEng {
+	if x.LanguageCode() == "eng" && y.LanguageCode() == "eng" {
+		if x.PID < y.PID {
+			return -1
+		}
+		if y.PID < x.PID {
+			return 1
+		}
+		return 0
+	}
+	if x.LanguageCode() == "eng" {
 		return -1
 	}
-	if yEng && !xEng {
+	if y.LanguageCode() == "eng" {
 		return 1
 	}
 	if x.LanguageCode() != y.LanguageCode() {
@@ -805,12 +818,19 @@ func compareGraphicsStreams(x, y *stream.GraphicsStream) int {
 	if sortY > sortX {
 		return 1
 	}
-	xEng := x.LanguageCode() == "eng"
-	yEng := y.LanguageCode() == "eng"
-	if xEng && !yEng {
+	if x.LanguageCode() == "eng" && y.LanguageCode() == "eng" {
+		if x.PID < y.PID {
+			return -1
+		}
+		if y.PID < x.PID {
+			return 1
+		}
+		return 0
+	}
+	if x.LanguageCode() == "eng" {
 		return -1
 	}
-	if yEng && !xEng {
+	if y.LanguageCode() == "eng" {
 		return 1
 	}
 	if x.LanguageCode() != y.LanguageCode() {
@@ -835,12 +855,19 @@ func compareTextStreams(x, y *stream.TextStream) int {
 	if y == nil {
 		return 1
 	}
-	xEng := x.LanguageCode() == "eng"
-	yEng := y.LanguageCode() == "eng"
-	if xEng && !yEng {
+	if x.LanguageCode() == "eng" && y.LanguageCode() == "eng" {
+		if x.PID < y.PID {
+			return -1
+		}
+		if y.PID < x.PID {
+			return 1
+		}
+		return 0
+	}
+	if x.LanguageCode() == "eng" {
 		return -1
 	}
-	if yEng && !xEng {
+	if y.LanguageCode() == "eng" {
 		return 1
 	}
 	if x.LanguageCode() != y.LanguageCode() {

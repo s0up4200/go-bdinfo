@@ -344,7 +344,10 @@ func skipHEVCShortTermRefPicSets(br *buffer.BitReader, numShortTermRefPicSets ui
 			}
 			for picPos := uint64(0); picPos <= numPics; picPos++ {
 				usedByCurrPic := readBool()
-				useDeltaFlag := readBool()
+				useDeltaFlag := false
+				if !usedByCurrPic {
+					useDeltaFlag = readBool()
+				}
 				if usedByCurrPic || useDeltaFlag {
 					numPicsNew++
 				}
